@@ -1,10 +1,16 @@
 import { PageHeader } from "@/components/page-header";
+import { listImportAccounts } from "@/lib/import/actions";
+import { ImportForm } from "./import-form";
 
-export default function ImportPage() {
+export default async function ImportPage() {
+  const accounts = await listImportAccounts();
   return (
     <>
-      <PageHeader title="CSV-Import" description="DKB, Revolut, PayPal." />
-      <p className="text-sm text-muted-foreground">Wird in Phase 3 implementiert.</p>
+      <PageHeader
+        title="CSV-Import"
+        description="Umsätze aus DKB, Revolut oder PayPal importieren. Doppelte werden automatisch übersprungen."
+      />
+      <ImportForm accounts={accounts} />
     </>
   );
 }

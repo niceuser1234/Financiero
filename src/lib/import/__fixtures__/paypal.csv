@@ -1,0 +1,5 @@
+"Datum","Uhrzeit","Zeitzone","Name","Typ","Status","Währung","Brutto","Entgelt","Netto","Absender E-Mail-Adresse","Empfänger E-Mail-Adresse","Transaktionscode","Rechnungsnummer"
+"01.07.2026","10:00:00","Europe/Berlin","Netflix International B.V.","Express-Checkout-Zahlung","Abgeschlossen","EUR","-12,99","0,00","-12,99","max@example.com","netflix@paypal.com","1AB23456CD789012E",""
+"30.06.2026","18:30:00","Europe/Berlin","Max Mustermann","Bankgutschrift auf PayPal-Konto","Abgeschlossen","EUR","50,00","0,00","50,00","","max@example.com","2XY34567EF890123G",""
+"29.06.2026","12:15:00","Europe/Berlin","Kleinanzeigen Verkäufer","Allgemeine Zahlung","Abgeschlossen","EUR","-25,00","0,00","-25,00","max@example.com","seller@example.com","3ZZ45678GH901234H",""
+"28.06.2026","09:00:00","Europe/Berlin","Ausstehend GmbH","Express-Checkout-Zahlung","Ausstehend","EUR","-5,00","0,00","-5,00","max@example.com","pending@example.com","4QQ56789IJ012345I",""
