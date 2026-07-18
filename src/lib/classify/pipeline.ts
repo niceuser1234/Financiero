@@ -4,6 +4,7 @@ import { transactions } from "@/db/schema";
 import { runTransferMatching } from "./transfer";
 import { applyRules } from "./rules";
 import { classifyUnknownFingerprints } from "./llm";
+import { runRecurringDetection } from "@/lib/recurring/apply";
 
 /**
  * Quellenunabhängige Nachverarbeitung nach jedem Sync/Import (Spec §4):
@@ -20,6 +21,7 @@ export async function runPipeline(insertedTxIds: string[]): Promise<void> {
   } catch {
     // Kein API-Key / API-Fehler soll den Sync nicht abbrechen.
   }
+  await runRecurringDetection();
 }
 
 /** Frühestes Buchungsdatum der neuen Buchungen; Fallback 30 Tage zurück. */
