@@ -6,6 +6,9 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     setupFiles: ["./test/setup.ts"],
+    // DB-Tests teilen sich eine Postgres-Instanz — seriell ausführen, damit
+    // die Cleanup-Hooks jeder Suite deterministisch greifen.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

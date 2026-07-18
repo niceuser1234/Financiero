@@ -35,10 +35,12 @@ export function TxView({
   initialPage,
   accounts,
   categories,
+  baseFilter,
 }: {
   initialPage: TxPage;
   accounts: Account[];
   categories: PickerCategory[];
+  baseFilter?: Partial<SerializableFilter>;
 }) {
   const [q, setQ] = useState("");
   const [accountIds, setAccountIds] = useState<string[]>([]);
@@ -55,6 +57,7 @@ export function TxView({
 
   const filter: SerializableFilter = useMemo(
     () => ({
+      ...baseFilter,
       q: q || undefined,
       accountIds: accountIds.length ? accountIds : undefined,
       categoryIds: categoryId ? [categoryId] : undefined,
@@ -63,7 +66,7 @@ export function TxView({
       includeTransfers,
       limit: 50,
     }),
-    [q, accountIds, categoryId, direction, presetDays, includeTransfers],
+    [q, accountIds, categoryId, direction, presetDays, includeTransfers, baseFilter],
   );
 
   // Bei Filteränderung Seite 1 neu laden (Suche debounced).

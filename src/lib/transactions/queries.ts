@@ -12,6 +12,8 @@ export interface TxFilter {
   maxCents?: bigint;
   direction?: "in" | "out";
   includeTransfers?: boolean;
+  /** Nur unsichere KI-Zuordnungen (confidence < 0.7). */
+  needsReview?: boolean;
   cursor?: string;
   limit?: number;
 }
@@ -65,6 +67,10 @@ function buildWhere(f: TxFilter): SQL | undefined {
   if (f.direction === "in") conds.push(gte(transactions.amountCents, 0n));
   if (f.direction === "out") conds.push(lt(transactions.amountCents, 0n));
   if (!f.includeTransfers) conds.push(eq(transactions.isTransfer, false));
+  if (f.needsReview) {
+    conds.push(eq(transactions.categorizationSource, "llm"));
+    conds.push(lt(transactions.confidence, 0.7));
+  }
 
   return and(...conds.filter((c): c is SQL => c !== undefined));
 }
