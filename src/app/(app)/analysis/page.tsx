@@ -1,5 +1,13 @@
 import { PageHeader } from "@/components/page-header";
+import { AnalysisView } from "@/components/analysis/analysis-view";
+import { getAnalyticsDTO } from "@/lib/analytics/actions";
 
-export default function AnalysisPage() {
-  return <PageHeader title="Analyse" description="Wofür dein Geld draufgeht." />;
+export default async function AnalysisPage() {
+  const initial = await getAnalyticsDTO();
+  return (
+    <>
+      <PageHeader title="Analyse" description="Wofür dein Geld draufgeht." />
+      <AnalysisView initial={initial} />
+    </>
+  );
 }
