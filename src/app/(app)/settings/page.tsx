@@ -2,8 +2,6 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { signOutAction } from "@/lib/auth-actions";
-import { Button } from "@/components/ui/button";
 import { fetchTransactions } from "@/lib/transactions/actions";
 
 export default async function SettingsPage() {
@@ -44,11 +42,6 @@ export default async function SettingsPage() {
           </Card>
         </Link>
       </div>
-      <form action={signOutAction} className="mt-8">
-        <Button variant="outline" type="submit">
-          Abmelden
-        </Button>
-      </form>
     </>
   );
 }

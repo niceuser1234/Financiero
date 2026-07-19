@@ -1,14 +1,10 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+/**
+ * Single-User-App ohne Login: keine Session-Prüfung.
+ * Die Funktionen bleiben als No-Op erhalten, damit bestehende Aufrufstellen
+ * (Server Actions) unverändert weiterlaufen.
+ */
+export async function requireSession(): Promise<void> {}
 
-/** Erzwingt eine gültige Session in Server Components / Server Actions. */
-export async function requireSession() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
-  return session;
-}
-
-export async function getSession() {
-  return auth.api.getSession({ headers: await headers() });
+export async function getSession(): Promise<null> {
+  return null;
 }

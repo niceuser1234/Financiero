@@ -1,9 +1,10 @@
-import { requireSession } from "@/lib/session";
 import { Sidebar, BottomTabs } from "@/components/app-nav";
 import { Toaster } from "@/components/ui/sonner";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requireSession();
+// DB-gestützte Seiten immer frisch rendern (kein Prerender mit Build-Zeit-Daten).
+export const dynamic = "force-dynamic";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       <Sidebar />

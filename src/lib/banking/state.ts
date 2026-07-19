@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 function secret(): string {
-  return process.env.BETTER_AUTH_SECRET ?? "dev-secret";
+  return process.env.APP_SIGNING_SECRET ?? "dev-secret";
 }
 
 /** Signiertes CSRF-State-Token für den OAuth-Redirect: "<payloadB64>.<hmac>". */

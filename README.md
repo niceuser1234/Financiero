@@ -24,7 +24,7 @@ docker compose up -d
 
 # 2. Env & Secrets
 cp .env.example .env
-#   BETTER_AUTH_SECRET / ENCRYPTION_KEY / CRON_SECRET je: openssl rand -hex 32
+#   APP_SIGNING_SECRET / ENCRYPTION_KEY / CRON_SECRET je: openssl rand -hex 32
 #   ENABLE_BANKING_APP_ID + ENABLE_BANKING_PRIVATE_KEY (base64-PEM) aus dem Enable-Banking-Control-Panel
 #   ANTHROPIC_API_KEY für die Klassifizierung
 
@@ -34,7 +34,7 @@ npm run db:push
 npm run db:seed          # 58 Kategorien
 
 # 4. Starten
-npm run dev              # http://localhost:3000  → erstes Konto anlegen (danach gesperrt)
+npm run dev              # http://localhost:3000  → öffnet direkt (kein Login, Single-User)
 ```
 
 Tests & Checks:
@@ -84,6 +84,11 @@ aufruft.
 ## Sicherheit
 
 Secrets nur serverseitig; Enable-Banking-Session AES-256-GCM-verschlüsselt in der DB; an die
-Anthropic-API gehen ausschließlich pseudonyme Händler-Strings (keine IBANs, Salden oder Namen);
-Registrierung nach dem ersten User gesperrt; alle Routen außer Login/Callback/Cron hinter der
-Session-Prüfung.
+Anthropic-API gehen ausschließlich pseudonyme Händler-Strings (keine IBANs, Salden oder Namen).
+
+**Kein Login (Single-User-App).** Die App hat keine Authentifizierung — wer die URL erreicht,
+sieht die Daten. Lokal ist das unkritisch. **Bei einem öffentlichen Deployment musst du den
+Zugang auf Netzwerkebene schützen**, z.B. Vercel Password Protection / Vercel Authentication,
+einen Reverse-Proxy mit Basic-Auth oder eine IP-Allowlist. Der Cron-Endpoint (`/api/cron/sync`)
+und der Banking-Callback bleiben unabhängig davon per `CRON_SECRET` bzw. signiertem
+State-Token geschützt.
