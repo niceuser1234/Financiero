@@ -2,119 +2,199 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* ==========================================================================
+   Financiero Design System — Tokens
+   Quelle: Design-System/unpacked/financiero-design-system/project/tokens/
+   Wörtlich übernommen. Nicht umbenennen, nicht nach oklch konvertieren.
+   ========================================================================== */
+:root {
+  /* --- Warme neutrale Flächen --- */
+  --bg: #FBF8F1;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFEFB;
+  --surface-sunken: #F1ECE1;
+  --surface-hover: #F5F1E7;
+
+  /* --- Ink (warm-neutraler Text) --- */
+  --ink-900: #161A22;
+  --ink-700: #3A3F4A;
+  --ink-500: #666B76;
+  --ink-400: #8A8F9A;
+  --ink-300: #AEB2BB;
+
+  /* --- Haarlinien --- */
+  --hairline: #E6E4DD;
+  --hairline-strong: #D8D6CD;
+
+  /* --- Akzent: Marine (die einzige Aktionsfarbe) --- */
+  --accent: #223A7A;
+  --accent-hover: #1B2F63;
+  --accent-active: #16264F;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #E6EAF4;
+  --accent-soft-fg: #223A7A;
+  --accent-ring: rgba(34, 58, 122, .32);
+
+  /* --- Semantik: Einnahmen --- */
+  --income: #1E6B48;
+  --income-mid: #3E8E6E;
+  --income-soft-bg: #E7F0EA;
+
+  /* --- Semantik: Ausgaben --- */
+  --expense: #C0322B;
+  --expense-strong: #A32B23;
+  --expense-soft-bg: #F6E7E5;
+
+  /* --- Semantik: nicht kategorisiert --- */
+  --uncat: #8A8F9A;
+  --uncat-soft-bg: #ECEBE6;
+
+  /* --- Semantik: Prüfen nötig --- */
+  --review: #9C6F1B;
+  --review-mid: #B4801F;
+  --review-soft-bg: #F6EEDA;
+
+  /* --- Chart-Palette (8 Kategorien, kein Lila/Mint) --- */
+  --chart-1: #223A7A;
+  --chart-2: #3E64B0;
+  --chart-3: #8CA0CE;
+  --chart-4: #D99A5A;
+  --chart-5: #BE7B5A;
+  --chart-6: #6E7B8A;
+  --chart-7: #B39A5E;
+  --chart-8: #7E8F73;
+
+  /* --- Radien --- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+
+  /* --- Elevation: warm, weich, diffus --- */
+  --shadow-xs: 0 1px 2px rgba(22, 26, 34, .05);
+  --shadow-sm: 0 2px 8px rgba(22, 26, 34, .06);
+  --shadow-md: 0 8px 24px rgba(27, 31, 39, .07);
+  --shadow-lg: 0 16px 40px rgba(27, 31, 39, .10);
+  --shadow-accent: 0 6px 16px rgba(34, 58, 122, .26);
+
+  /* --- Motion --- */
+  --ease-out: cubic-bezier(.2, .7, .3, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+
+  /* --- Typografie --- */
+  --font-display: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
+  --tracking-label: 0.09em;
+  --tracking-tight: -0.02em;
+
+  /* --- Spacing / Layout --- */
+  --card-pad: 24px;
+  --page-pad-x: 42px;
+  --page-pad-y: 38px;
+  --sidebar-w: 240px;
+  --row-pad-y: 14px;
+
+  /* ========================================================================
+     Bridge: shadcn-Semantik auf DS-Tokens.
+     Dadurch werden bestehende Komponenten DS-konform, ohne sie anzufassen.
+     ======================================================================== */
+  --background: var(--bg);
+  --foreground: var(--ink-900);
+  --card: var(--surface);
+  --card-foreground: var(--ink-900);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink-900);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-fg);
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--ink-900);
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--ink-500);
+  /* Achtung, Namenskollision: shadcn nutzt --accent als dezente Hoverfläche,
+     das DS als Marine-Aktionsfarbe. Das DS-Vokabular gewinnt, deshalb wird
+     --accent hier NICHT umgebogen. Die shadcn-Konsumenten von bg-accent
+     (select, dropdown-menu) werden in Task 8 auf surface-hover umgestellt. */
+  --accent-foreground: var(--accent-fg);
+  --destructive: var(--expense);
+  --border: var(--hairline);
+  --input: var(--hairline-strong);
+  --ring: var(--accent-ring);
+  --sidebar: var(--bg);
+  --sidebar-foreground: var(--ink-900);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--accent-fg);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--ink-900);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--accent-ring);
+}
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  /* DS-Flächen und Ink als Utilities */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-ink-900: var(--ink-900);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-300: var(--ink-300);
+  --color-accent-soft: var(--accent-soft);
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Semantik */
+  --color-income: var(--income);
+  --color-income-mid: var(--income-mid);
+  --color-income-soft: var(--income-soft-bg);
+  --color-expense: var(--expense);
+  --color-expense-strong: var(--expense-strong);
+  --color-expense-soft: var(--expense-soft-bg);
+  --color-uncat: var(--uncat);
+  --color-uncat-soft: var(--uncat-soft-bg);
+  --color-review: var(--review);
+  --color-review-soft: var(--review-soft-bg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
+  --font-heading: var(--font-display);
+
+  --shadow-ds-xs: var(--shadow-xs);
+  --shadow-ds-sm: var(--shadow-sm);
+  --shadow-ds-md: var(--shadow-md);
+  --shadow-ds-lg: var(--shadow-lg);
+  --shadow-ds-accent: var(--shadow-accent);
 }
 
 @layer base {
@@ -126,5 +206,10 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Geldbeträge und KPI-Zahlen immer tabellarisch. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
   }
 }
