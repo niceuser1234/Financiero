@@ -20,6 +20,16 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
         </Link>
+        <Link href="/settings/fints">
+          <Card className="transition-colors hover:border-primary">
+            <CardHeader>
+              <CardTitle className="text-base">DKB via FinTS</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Kostenlose Live-Synchronisation der DKB über FinTS/HBCI.
+            </CardContent>
+          </Card>
+        </Link>
         <Link href="/settings/import">
           <Card className="transition-colors hover:border-primary">
             <CardHeader>
