@@ -54,3 +54,14 @@ export class EnableBankingError extends Error {
     this.name = "EnableBankingError";
   }
 }
+
+/** Schmales Interface, das runSync tatsächlich braucht — beide Provider erfüllen es. */
+export type ReadProvider = Pick<BankProvider, "fetchBalances" | "fetchTransactions">;
+
+/** Signalisiert, dass die Bank eine (erneute) TAN-Freigabe verlangt. */
+export class NeedTanError extends Error {
+  constructor(message = "TAN-Freigabe erforderlich") {
+    super(message);
+    this.name = "NeedTanError";
+  }
+}
