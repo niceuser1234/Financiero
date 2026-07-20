@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Handoff-Paket des Design Systems: Referenzmaterial, kein Projektcode.
+    "Design-System/**",
   ]),
 ]);
 

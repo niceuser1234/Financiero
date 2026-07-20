@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 /drizzle/meta/_journal.json.lock
 *.tsbuildinfo
+Design-System/unpacked/
