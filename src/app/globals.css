@@ -45,12 +45,18 @@
   --expense-strong: #A32B23;
   --expense-soft-bg: #F6E7E5;
 
-  /* --- Semantik: nicht kategorisiert --- */
-  --uncat: #8A8F9A;
+  /* --- Semantik: nicht kategorisiert ---
+     ABWEICHUNG vom gelieferten DS: --uncat war #8A8F9A. Auf --uncat-soft-bg
+     ergab das 2,72:1 und verfehlte WCAG AA (4,5:1) für den 12px-Badge-Text
+     deutlich. Abgedunkelt auf 4,97:1. Fläche unverändert. */
+  --uncat: #5F646F;
   --uncat-soft-bg: #ECEBE6;
 
-  /* --- Semantik: Prüfen nötig --- */
-  --review: #9C6F1B;
+  /* --- Semantik: Prüfen nötig ---
+     ABWEICHUNG vom gelieferten DS: --review war #9C6F1B → 3,86:1 auf
+     --review-soft-bg, unter WCAG AA. Abgedunkelt auf 4,94:1.
+     --review-mid (Diagramm-/Labelfarbe, kein Fließtext) bleibt original. */
+  --review: #85600F;
   --review-mid: #B4801F;
   --review-soft-bg: #F6EEDA;
 
