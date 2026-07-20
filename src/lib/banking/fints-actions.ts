@@ -37,11 +37,14 @@ async function sidecarPost(path: string, body: unknown): Promise<SidecarResult> 
 
 async function saveAccounts(connectionId: string, accts: SidecarAccount[]): Promise<void> {
   for (const a of accts) {
-    const existing = await db.select().from(bankAccounts).where(eq(bankAccounts.ebAccountUid, a.iban));
-    if (existing.length === 0) {
+    const [existing] = await db.select().from(bankAccounts).where(eq(bankAccounts.ebAccountUid, a.iban));
+    if (!existing) {
       await db.insert(bankAccounts).values({
         connectionId, ebAccountUid: a.iban, name: a.name, currency: a.currency, type: "checking",
       });
+    } else if (existing.connectionId !== connectionId) {
+      // IBAN wandert zur (neu freigegebenen) Connection, statt still verwaist zu bleiben.
+      await db.update(bankAccounts).set({ connectionId }).where(eq(bankAccounts.id, existing.id));
     }
   }
 }
@@ -86,5 +89,31 @@ export async function confirmFintsTan(connectionId: string): Promise<FintsConnec
   if (r.pending_state) {
     await db.update(connections).set({ fintsStateEnc: encrypt(r.pending_state) }).where(eq(connections.id, connectionId));
   }
+  return { status: "need_tan", connectionId, challenge: r.challenge };
+}
+
+/** Gibt eine bestehende (abgelaufene) FinTS-Verbindung mit gespeicherten Zugangsdaten erneut frei,
+ *  statt eine zweite Verbindung anzulegen. Danach ggf. confirmFintsTan() pollen. */
+export async function reconnectFints(connectionId: string): Promise<FintsConnectResult> {
+  await requireSession();
+  const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
+  if (!conn || conn.provider !== "fints") throw new Error("FinTS-Verbindung nicht gefunden");
+  if (!conn.pinEnc) throw new Error("Verbindung hat keine gespeicherten Zugangsdaten");
+
+  const r = await sidecarPost("/connect", {
+    blz: conn.blz, user: conn.fintsUserId, pin: decrypt(conn.pinEnc),
+    endpoint: conn.fintsEndpoint, product_id: conn.fintsProductId,
+  });
+
+  if (r.status === "connected") {
+    await db.update(connections).set({
+      status: "active", fintsStateEnc: encrypt(r.client_state ?? ""),
+    }).where(eq(connections.id, connectionId));
+    await saveAccounts(connectionId, r.accounts ?? []);
+    return { status: "connected", connectionId };
+  }
+  await db.update(connections).set({
+    status: "expired", fintsStateEnc: encrypt(r.pending_state ?? ""),
+  }).where(eq(connections.id, connectionId));
   return { status: "need_tan", connectionId, challenge: r.challenge };
 }
