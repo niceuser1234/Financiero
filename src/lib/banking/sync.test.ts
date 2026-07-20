@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { bankAccounts, connections, syncRuns, transactions } from "@/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { runSync } from "./sync";
+import { NeedTanError } from "./types";
 import type { BankProvider, ProviderBalance, ProviderTransaction } from "./types";
 
 function makeProvider(
@@ -116,5 +117,25 @@ describe("runSync", () => {
     let received: string[] = [];
     await runSync("manual", { provider, today: new Date("2026-07-10"), postProcess: async (ids) => { received = ids; } });
     expect(received).toHaveLength(1);
+  });
+
+  it("marks a fints connection expired when the provider needs a TAN", async () => {
+    const iban = `DE-${crypto.randomUUID()}`;
+    const [conn] = await db.insert(connections).values({
+      provider: "fints", aspspName: MARKER, status: "active",
+      blz: "12030000", fintsUserId: "u", fintsEndpoint: "e", fintsProductId: "x",
+      pinEnc: encrypt("1234"), fintsStateEnc: encrypt("state"),
+    }).returning();
+    await db.insert(bankAccounts).values({ connectionId: conn.id, ebAccountUid: iban, name: "Giro", currency: "EUR" });
+
+    const provider: BankProvider = {
+      getAspsps: async () => [], startAuth: async () => ({ url: "" }),
+      completeAuth: async () => ({ sessionId: "", validUntil: null, accounts: [] }),
+      fetchBalances: async () => [],
+      fetchTransactions: async () => { throw new NeedTanError(); },
+    };
+    await runSync("cron", { provider, today: new Date("2026-07-10") });
+    const [after] = await db.select().from(connections).where(eq(connections.id, conn.id));
+    expect(after.status).toBe("expired");
   });
 });

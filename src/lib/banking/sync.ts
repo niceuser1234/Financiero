@@ -4,7 +4,8 @@ import { bankAccounts, connections, syncRuns, transactions } from "@/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { importHash } from "@/lib/import/hash";
 import { enableBankingFromEnv } from "./enable-banking";
-import type { BankProvider, ProviderTransaction } from "./types";
+import { FintsProvider } from "./fints";
+import { NeedTanError, type BankProvider, type ProviderTransaction, type ReadProvider } from "./types";
 
 export interface SyncStats {
   newTx: number;
@@ -14,7 +15,7 @@ export interface SyncStats {
 
 export interface SyncOptions {
   /** Injizierbarer Provider für Tests; sonst aus Env gebaut. */
-  provider?: BankProvider;
+  provider?: ReadProvider;
   /** Nachverarbeitung (unwrap/match/rules/recurring) — wird in späteren Phasen gefüllt. */
   postProcess?: (insertedTxIds: string[]) => Promise<void>;
   today?: Date;
@@ -64,6 +65,27 @@ function toRow(accountId: string, t: ProviderTransaction) {
   };
 }
 
+function buildProvider(conn: typeof connections.$inferSelect): { provider: ReadProvider; sessionId: string } {
+  if (conn.provider === "fints") {
+    const baseUrl = process.env.FINTS_SIDECAR_URL ?? "http://127.0.0.1:8790";
+    const token = process.env.FINTS_SIDECAR_TOKEN ?? "";
+    return {
+      provider: new FintsProvider({
+        baseUrl, token,
+        blz: conn.blz ?? "", user: conn.fintsUserId ?? "",
+        pin: conn.pinEnc ? decrypt(conn.pinEnc) : "",
+        endpoint: conn.fintsEndpoint ?? "", productId: conn.fintsProductId ?? "",
+        clientState: conn.fintsStateEnc ? decrypt(conn.fintsStateEnc) : "",
+      }),
+      sessionId: "",
+    };
+  }
+  return {
+    provider: enableBankingFromEnv(),
+    sessionId: conn.sessionIdEnc ? decrypt(conn.sessionIdEnc) : "",
+  };
+}
+
 export async function runSync(
   trigger: "cron" | "manual",
   opts: SyncOptions = {},
@@ -77,14 +99,18 @@ export async function runSync(
   const conns = await db
     .select()
     .from(connections)
-    .where(and(eq(connections.provider, "enable_banking"), eq(connections.status, "active")));
+    .where(eq(connections.status, "active"));
 
   for (const conn of conns) {
-    let provider: BankProvider;
+    let provider: ReadProvider;
     let sessionId: string;
     try {
-      provider = opts.provider ?? enableBankingFromEnv();
-      sessionId = conn.sessionIdEnc ? decrypt(conn.sessionIdEnc) : "";
+      if (opts.provider) {
+        provider = opts.provider;
+        sessionId = conn.sessionIdEnc ? decrypt(conn.sessionIdEnc) : "";
+      } else {
+        ({ provider, sessionId } = buildProvider(conn));
+      }
     } catch (e) {
       stats.errors.push(`${conn.aspspName}: ${(e as Error).message}`);
       continue;
@@ -171,6 +197,7 @@ export async function runSync(
 }
 
 function isConsentError(e: unknown): boolean {
+  if (e instanceof NeedTanError) return true;
   const msg = (e as Error)?.message ?? "";
   return /\b(401|403)\b/.test(msg);
 }
