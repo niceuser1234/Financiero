@@ -86,10 +86,10 @@ Bestehende Dateien in [`src/components/ui/`](../../../src/components/ui/) werden
 | Komponente | Anpassung |
 |---|---|
 | `button.tsx` | 4 Varianten nach DS: primary = Marine + `--shadow-accent`; secondary = weiß + `--hairline-strong` + `--shadow-xs`; ghost; danger = weiß + `--expense`. Radius `md`. Kein Shrink beim Press. |
-| `card.tsx` | Radius `lg` (16px), `--shadow-md`, borderlos auf Creme-Grund; Hairline nur wenn auf Weiß. Padding `--card-pad` (24px). |
+| `card.tsx` | Radius `lg` (16px), `--shadow-md`, **plus** 1px `--hairline` (der gelieferte `Card.jsx` setzt beides immer — nicht "borderlos"). Padding `--card-pad` (24px). |
 | `badge.tsx` | Pill-Radius, `--*-soft-bg`-Töne für income/expense/review/uncat. |
 | `input.tsx` | Radius `md`, `--surface-raised`, Fokusring 2–3px `--accent-ring`. |
-| `tabs.tsx` | Optik des DS-`SegmentedControl`: versenkte `--surface-sunken`-Bahn, aktives Segment weiß mit `--shadow-xs`, Radius `sm`. |
+| `tabs.tsx` | Optik des DS-`SegmentedControl`: **weißer** Container (`--surface`, 1px `--hairline`, `--shadow-sm`, Radius `md`, 4px Innenpadding), aktives Segment **marine-gefüllt** mit `--shadow-accent`, Radius `sm`. |
 | `table.tsx` | Zeilenpadding `--row-pad-y` (14px), Hairline-Trenner, Beträge rechtsbündig tabular. |
 | `select`, `dropdown-menu`, `dialog`, `sheet`, `skeleton` | Radien, Schatten, Hover auf `--surface-hover` ziehen. |
 
@@ -104,7 +104,7 @@ Neues Verzeichnis `src/components/ds/`. Jede Komponente wird aus ihrem DS-Pendan
 | `KpiCard` | Uppercase-Eyebrow (`--tracking-label`), Space-Grotesk-Wert, getönter Grund bei income/expense. **Löst `stat-tile.tsx` ab.** | `components/surfaces/KpiCard.jsx` |
 | `TransactionRow` | Merchant-Avatar, Name + Kategorie, Repeat-Glyph bei Wiederkehrern, rechtsbündiger Tabular-Betrag mit Tone | `components/data/TransactionRow.jsx` |
 | `MerchantAvatar` | Getöntes Rounded-Square mit Initiale. Explizit **keine** gefetchten Logos. | ebd. |
-| `Money` | Rendert Cents nach DS-Regeln: tabular, rechtsbündig, Tone income/expense/neutral | Regel aus `readme.md` |
+| `Money` | Rendert Cents nach DS-Regeln: tabular, rechtsbündig, Space Grotesk. **Tone: Einnahmen `--income` (grün), Ausgaben `--ink-900` (neutral)** | `TransactionRow.jsx` |
 | `FilterPill` / `FilterChip` | Filter-Auswahl bzw. entfernbarer aktiver Filter | `components/controls/` |
 | `SegmentedControl` | Zeitraum-/Status-Umschalter | `components/controls/SegmentedControl.jsx` |
 | `EmptyState` | Icon + Titel + Lead, "du"-Ansprache | `components/surfaces/EmptyState.jsx` |
@@ -119,7 +119,7 @@ Umbau nach `ui_kits/financiero/` bei **unveränderter IA**:
 
 | Route | Sollzustand |
 |---|---|
-| `/dashboard` | KPI-Reihe (Gesamtsaldo, Einnahmen, Ausgaben, Abos) als `KpiCard`; Ausgaben nach Kategorie; Konten; Anstehende Abbuchungen; "Jetzt synchronisieren" |
+| `/dashboard` | KPI-Reihe als `KpiCard` — Gesamtsaldo `tone="accent"` (marine gefüllt), Einnahmen `tone="income"`, Ausgaben `tone="expense"`, Abos `tone="neutral"`; darunter Donut + Konten, dann Letzte Umsätze + Anstehende Abbuchungen; "Jetzt synchronisieren" im Header |
 | `/transactions` | Suchfeld, Filter, aktive Filter-Chips, Datumsgruppen mit `TransactionRow`, Summenzeile |
 | `/contracts` | Summary-Card (pro Monat / N aktiv), `SegmentedControl` Aktiv/Einnahmen/Beendet, Vertragskarten |
 | `/analysis` | Zeitraum-Toggle (Monat/3 Monate/1 Jahr), KPI Einnahmen/Ausgaben, Donut, Bars 6 Monate, Top-Händler |
