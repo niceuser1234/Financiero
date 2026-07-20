@@ -13,10 +13,14 @@ function formatterFor(currency: string): Intl.NumberFormat {
   return fmt;
 }
 
-/** Formatiert Cents als deutschen Währungsstring, z.B. -123456n -> "-1.234,56 €". */
+/**
+ * Formatiert Cents als deutschen Währungsstring, z.B. -123456n -> "−1.234,56 €".
+ * Negative Beträge nutzen U+2212 (Minuszeichen), wie vom Design System gefordert —
+ * nicht den ASCII-Hyphen, den Intl per Default liefert.
+ */
 export function formatCents(cents: bigint, currency = "EUR"): string {
   const value = Number(cents) / 100;
-  return formatterFor(currency).format(value);
+  return formatterFor(currency).format(value).replace(/^-/, "−");
 }
 
 /**
