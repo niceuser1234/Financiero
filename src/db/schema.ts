@@ -15,7 +15,7 @@ import {
 
 export * from "./auth-schema";
 
-export const providerEnum = pgEnum("provider", ["enable_banking", "csv"]);
+export const providerEnum = pgEnum("provider", ["enable_banking", "csv", "fints"]);
 export const connectionStatusEnum = pgEnum("connection_status", ["active", "expired", "revoked"]);
 export const accountTypeEnum = pgEnum("account_type", ["checking", "credit_card", "emoney"]);
 export const catSourceEnum = pgEnum("categorization_source", ["rule", "llm", "manual", "import", "none"]);
@@ -35,6 +35,13 @@ export const connections = pgTable("connections", {
   aspspName: text("aspsp_name").notNull(),
   aspspCountry: text("aspsp_country").notNull().default("DE"),
   sessionIdEnc: text("session_id_enc"),
+  blz: text("blz"),
+  fintsUserId: text("fints_user_id"),
+  fintsEndpoint: text("fints_endpoint"),
+  fintsProductId: text("fints_product_id"),
+  pinEnc: text("pin_enc"),
+  fintsStateEnc: text("fints_state_enc"),
+  tanMechanism: text("tan_mechanism"),
   status: connectionStatusEnum("status").notNull().default("active"),
   consentValidUntil: timestamp("consent_valid_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
