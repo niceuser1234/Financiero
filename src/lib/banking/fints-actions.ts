@@ -20,7 +20,7 @@ interface SidecarResult {
 
 let fetchOverride: typeof fetch | undefined;
 /** Nur für Tests: injiziert ein fetch. */
-export function __setFetch(f: typeof fetch | undefined) { fetchOverride = f; }
+export async function __setFetch(f: typeof fetch | undefined) { fetchOverride = f; }
 
 async function sidecarPost(path: string, body: unknown): Promise<SidecarResult> {
   const f = fetchOverride ?? fetch;
