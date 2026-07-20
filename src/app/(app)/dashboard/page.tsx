@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
+import { Repeat, Wallet } from "lucide-react";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
-import { StatTile } from "@/components/stat-tile";
+import { KpiCard } from "@/components/ds/kpi-card";
 import { SyncButton } from "@/components/sync-button";
 import { CategoryDonut } from "@/components/charts/category-donut";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,10 +45,10 @@ export default async function DashboardPage() {
       )}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Gesamtsaldo" value={dto.totalBalanceFmt} />
-        <StatTile label="Einnahmen (Monat)" value={dto.incomeFmt} tone="positive" />
-        <StatTile label="Ausgaben (Monat)" value={dto.expensesFmt} tone="negative" />
-        <StatTile label="Abos / Monat" value={dto.subsFmt} hint="wiederkehrend" />
+        <KpiCard label="Gesamtsaldo" value={dto.totalBalanceFmt} tone="accent" icon={Wallet} />
+        <KpiCard label="Einnahmen / Monat" value={dto.incomeFmt} tone="income" />
+        <KpiCard label="Ausgaben / Monat" value={dto.expensesFmt} tone="expense" />
+        <KpiCard label="Abos / Monat" value={dto.subsFmt} tone="neutral" icon={Repeat} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
