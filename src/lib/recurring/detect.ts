@@ -10,6 +10,7 @@ export interface FingerprintGroup {
   isSubscriptionHint: boolean;
   /** Optional display name / fingerprint for brand and kind logic. */
   label?: string;
+  categoryKind?: "expense" | "income" | "transfer" | "excluded" | "saving";
   txs: RecurringTx[];
 }
 
@@ -18,7 +19,7 @@ export type Cadence = "weekly" | "monthly" | "quarterly" | "yearly";
 export interface RecurringResult {
   merchantId: string;
   cadence: Cadence;
-  kind: "subscription" | "contract" | "income" | "other";
+  kind: "subscription" | "contract" | "income" | "saving" | "other";
   amountLastCents: bigint;
   amountMedianCents: bigint;
   monthlyEquivCents: bigint;
@@ -160,7 +161,9 @@ function inferKind(
   medAmount: bigint,
   isSubscriptionHint: boolean,
   label?: string,
+  categoryKind?: FingerprintGroup["categoryKind"],
 ): RecurringResult["kind"] {
+  if (categoryKind === "saving") return "saving";
   if (medAmount > 0n) return "income";
   const text = (label ?? "").toLowerCase();
   if (/\b(miete|nebenkosten|rent|versicherung|strom|gas|telefon|handy|internet|kaltmiete)\b/i.test(text)) {
@@ -191,6 +194,7 @@ function detectOneCluster(
   merchantId: string,
   isSubscriptionHint: boolean,
   label: string | undefined,
+  categoryKind: FingerprintGroup["categoryKind"],
   txsIn: RecurringTx[],
   today: string,
 ): RecurringResult | null {
@@ -237,7 +241,7 @@ function detectOneCluster(
   return {
     merchantId,
     cadence: bucket.cadence,
-    kind: inferKind(medAmount, isSubscriptionHint, label),
+    kind: inferKind(medAmount, isSubscriptionHint, label, categoryKind),
     amountLastCents: last.amountCents,
     amountMedianCents: medAmount,
     monthlyEquivCents: monthlyEquiv(medAmount, bucket),
@@ -267,7 +271,7 @@ export function detectRecurring(groups: FingerprintGroup[], today: string): Recu
     const seenCadences = new Set<Cadence>();
 
     for (const cluster of clusters) {
-      const r = detectOneCluster(g.merchantId, g.isSubscriptionHint, g.label, cluster, today);
+      const r = detectOneCluster(g.merchantId, g.isSubscriptionHint, g.label, g.categoryKind, cluster, today);
       if (!r) continue;
       if (seenCadences.has(r.cadence)) continue;
       seenCadences.add(r.cadence);

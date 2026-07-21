@@ -103,6 +103,22 @@ describe("detectRecurring", () => {
     );
     expect(r.kind).toBe("contract");
   });
+
+  it("infers saving kind from category", () => {
+    const today = "2026-07-21";
+    const mk = (d: string): { id: string; bookingDate: string; amountCents: bigint; currency: string } => ({
+      id: d, bookingDate: d, amountCents: -10000n, currency: "EUR",
+    });
+    const res = detectRecurring(
+      [{
+        merchantId: "tr", isSubscriptionHint: false, label: "Sparplan",
+        categoryKind: "saving",
+        txs: [mk("2026-05-05"), mk("2026-06-05"), mk("2026-07-05")],
+      }],
+      today,
+    );
+    expect(res[0]?.kind).toBe("saving");
+  });
 });
 
 describe("clusterByAmount", () => {
