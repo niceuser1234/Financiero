@@ -37,6 +37,7 @@ const TONES: Record<KpiTone, { card: string; label: string; value: string; delta
 export function KpiCard({
   label,
   value,
+  sublabel,
   tone = "neutral",
   delta,
   deltaDir,
@@ -44,6 +45,7 @@ export function KpiCard({
 }: {
   label: string;
   value: string;
+  sublabel?: string;
   tone?: KpiTone;
   delta?: string;
   deltaDir?: "up" | "down";
@@ -73,6 +75,9 @@ export function KpiCard({
       >
         {value}
       </div>
+      {sublabel && (
+        <div className={cn("mt-1.5 text-[11px] font-medium", t.label)}>{sublabel}</div>
+      )}
       {delta && (
         <div className={cn("tabular mt-2 flex items-center gap-1.5 text-[13px] font-medium", t.delta)}>
           {DeltaIcon && <DeltaIcon className="size-[15px]" strokeWidth={2} />}
