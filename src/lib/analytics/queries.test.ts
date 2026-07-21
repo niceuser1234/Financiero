@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { bankAccounts, categories, merchants, recurringItems, transactions } from "@/db/schema";
 import { importHash } from "@/lib/import/hash";
 import { getDashboardData } from "./queries";
+import { currentMonthWindow } from "./period";
 
 const MARK = `__antest_${crypto.randomUUID()}__`;
 let accountId = "";
@@ -184,5 +185,105 @@ describe("getDashboardData: Sparen zählt nicht als Ausgabe", () => {
     const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
     const current = d.trend.find((t) => t.month === "2026-07");
     expect(current?.expenseCents).toBe(-2000n); // nur Lebensmittel, nicht die -10000 Sparen-Buchung
+  });
+});
+
+// Pure guard: remaining window is (to, monthEnd]. A charge due today is already counted
+// in the balance, one due after month-end belongs to next month.
+describe("remaining-fixed window", () => {
+  it("only includes charges strictly after today, up to month end", () => {
+    const w = currentMonthWindow(new Date("2026-07-21T00:00:00Z"));
+    const due = "2026-07-25";
+    expect(due > w.to && due <= w.monthEnd).toBe(true);
+    expect("2026-07-21" > w.to).toBe(false); // today excluded
+    expect("2026-08-01" <= w.monthEnd).toBe(false); // next month excluded
+  });
+});
+
+describe("getDashboardData: remainingFixedCents / realAvailableCents", () => {
+  const MARK4 = `__antest_remaining_${crypto.randomUUID()}__`;
+  let accountId4 = "";
+  let merchantId4 = "";
+  // Die lokale DB enthält reale Fixkosten-Termine (kein isoliertes Test-Schema) — daher
+  // per Delta statt absoluter Summe prüfen, damit der Test robust gegen Fremddaten ist.
+  let baseline: Awaited<ReturnType<typeof getDashboardData>>;
+
+  beforeAll(async () => {
+    baseline = await getDashboardData(new Date("2026-07-21"));
+
+    const [a] = await db
+      .insert(bankAccounts)
+      .values({ name: MARK4, type: "checking", currency: "EUR", balanceCents: 100000n })
+      .returning();
+    accountId4 = a.id;
+
+    const [m] = await db.insert(merchants).values({ fingerprint: MARK4, nameClean: MARK4 }).returning();
+    merchantId4 = m.id;
+
+    await db.insert(recurringItems).values([
+      {
+        merchantId: merchantId4,
+        cadence: "monthly",
+        kind: "subscription",
+        amountLastCents: -1500n,
+        amountMedianCents: -1500n,
+        monthlyEquivCents: -1500n,
+        currency: "EUR",
+        nextExpectedDate: "2026-07-25", // strictly after "to" (2026-07-21), before month end -> included
+        status: "active",
+        firstSeen: "2026-01-01",
+        lastSeen: "2026-06-01",
+      },
+      {
+        merchantId: merchantId4,
+        cadence: "quarterly",
+        kind: "subscription",
+        amountLastCents: -2500n,
+        amountMedianCents: -2500n,
+        monthlyEquivCents: -2500n,
+        currency: "EUR",
+        nextExpectedDate: "2026-07-21", // == "to" -> excluded (already accounted for in balance)
+        status: "active",
+        firstSeen: "2026-01-01",
+        lastSeen: "2026-06-01",
+      },
+      {
+        merchantId: merchantId4,
+        cadence: "yearly",
+        kind: "subscription",
+        amountLastCents: -5000n,
+        amountMedianCents: -5000n,
+        monthlyEquivCents: -5000n,
+        currency: "EUR",
+        nextExpectedDate: "2026-08-01", // next month -> excluded
+        status: "active",
+        firstSeen: "2026-01-01",
+        lastSeen: "2026-06-01",
+      },
+    ]);
+  });
+
+  afterAll(async () => {
+    await db.delete(recurringItems).where(eq(recurringItems.merchantId, merchantId4));
+    await db.delete(merchants).where(eq(merchants.id, merchantId4));
+    await db.delete(bankAccounts).where(eq(bankAccounts.id, accountId4));
+  });
+
+  it("sums only recurring charges strictly after today up to month end", async () => {
+    const d = await getDashboardData(new Date("2026-07-21"));
+    // Nur der Termin am 07-25 (strikt nach "to", vor Monatsende) schlägt zu Buche;
+    // 07-21 (== to) und 08-01 (nächster Monat) bleiben außen vor.
+    expect(d.remainingFixedCents - baseline.remainingFixedCents).toBe(-1500n);
+  });
+
+  it("realAvailableCents = totalBalanceCents + remainingFixedCents", async () => {
+    const d = await getDashboardData(new Date("2026-07-21"));
+    expect(d.realAvailableCents).toBe(d.totalBalanceCents + d.remainingFixedCents);
+  });
+
+  it("exposes periodFrom/periodTo matching the default window", async () => {
+    const d = await getDashboardData(new Date("2026-07-21"));
+    expect(d.periodFrom).toBe("2026-07-01");
+    expect(d.periodTo).toBe("2026-07-21");
   });
 });

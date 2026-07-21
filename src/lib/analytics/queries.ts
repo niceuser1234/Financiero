@@ -1,6 +1,7 @@
 import { and, eq, gte, lte, lt, sql, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, categories, merchants, recurringItems, transactions } from "@/db/schema";
+import { currentMonthWindow } from "./period";
 
 export interface CategorySlice {
   categoryId: string;
@@ -33,6 +34,10 @@ export interface DashboardData {
   topMerchants: MerchantSlice[];
   upcoming: UpcomingItem[];
   savingMonthCents: bigint;
+  remainingFixedCents: bigint;
+  realAvailableCents: bigint;
+  periodFrom: string;
+  periodTo: string;
 }
 
 function monthStart(d: Date): string {
@@ -50,8 +55,10 @@ export async function getDashboardData(
   today = new Date(),
   range?: { from: string; to: string },
 ): Promise<DashboardData> {
-  const from = range?.from ?? monthStart(today);
-  const to = range?.to ?? today.toISOString().slice(0, 10);
+  const win = currentMonthWindow(today);
+  const from = range?.from ?? win.from;
+  const to = range?.to ?? win.to;
+  const monthEnd = win.monthEnd;
 
   const notTransfer = eq(transactions.isTransfer, false);
   const inRange = and(gte(transactions.bookingDate, from), lte(transactions.bookingDate, to), notTransfer);
@@ -78,6 +85,22 @@ export async function getDashboardData(
     .select({ sum: sql<string>`coalesce(sum(${recurringItems.monthlyEquivCents}), 0)` })
     .from(recurringItems)
     .where(and(eq(recurringItems.status, "active"), sql`${recurringItems.kind} <> 'income'`));
+
+  // Fixkosten, die diesen Monat noch NICHT abgebucht wurden (heute < fällig ≤ Monatsende).
+  const [remaining] = await db
+    .select({
+      sum: sql<string>`coalesce(sum(${recurringItems.amountLastCents}), 0)`,
+    })
+    .from(recurringItems)
+    .where(
+      and(
+        eq(recurringItems.status, "active"),
+        sql`${recurringItems.kind} <> 'income'`,
+        sql`${recurringItems.nextExpectedDate} > ${to}`,
+        sql`${recurringItems.nextExpectedDate} <= ${monthEnd}`,
+      ),
+    );
+  const remainingFixedCents = BigInt(remaining?.sum ?? "0"); // negativ
 
   // Ausgaben nach Kategorie (auf Top-Level gerollt).
   const catRows = await db
@@ -185,5 +208,9 @@ export async function getDashboardData(
     topMerchants,
     upcoming,
     savingMonthCents: BigInt(flow?.saving ?? "0"),
+    remainingFixedCents,
+    realAvailableCents: BigInt(bal?.sum ?? "0") + remainingFixedCents,
+    periodFrom: from,
+    periodTo: to,
   };
 }
