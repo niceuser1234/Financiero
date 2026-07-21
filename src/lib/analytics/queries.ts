@@ -92,7 +92,7 @@ export async function getDashboardData(
   for (const r of catRows) {
     if (!r.categoryId) continue;
     const c = catById.get(r.categoryId);
-    if (!c || c.kind === "transfer" || c.kind === "excluded") continue;
+    if (!c || c.kind === "transfer" || c.kind === "excluded" || c.kind === "saving") continue;
     const topId = c.parentId ?? c.id;
     rollup.set(topId, (rollup.get(topId) ?? 0n) + BigInt(r.sum));
   }
@@ -119,10 +119,11 @@ export async function getDashboardData(
   const trendRows = await db
     .select({
       month: sql<string>`to_char(${transactions.bookingDate}::date, 'YYYY-MM')`,
-      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 then ${transactions.amountCents} else 0 end), 0)`,
-      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 then ${transactions.amountCents} else 0 end), 0)`,
+      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
+      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
     })
     .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(and(gte(transactions.bookingDate, trendFrom), notTransfer))
     .groupBy(sql`to_char(${transactions.bookingDate}::date, 'YYYY-MM')`);
   const trendMap = new Map(trendRows.map((r) => [r.month, r]));

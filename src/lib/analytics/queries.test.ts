@@ -172,4 +172,17 @@ describe("getDashboardData: Sparen zählt nicht als Ausgabe", () => {
     expect(d.savingMonthCents).toBe(-10000n);
     expect(d.expensesMonthCents).toBe(-2000n);
   });
+
+  it("byCategory (Donut) enthält keinen Slice für Sparen, wohl aber für Lebensmittel", async () => {
+    const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
+    expect(d.byCategory.find((c) => c.name === "Sparen & Investieren")).toBeUndefined();
+    const food = d.byCategory.find((c) => c.name === "Lebensmittel");
+    expect(food?.sumCents).toBe(-2000n);
+  });
+
+  it("Trend des aktuellen Monats schließt Sparen aus", async () => {
+    const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
+    const current = d.trend.find((t) => t.month === "2026-07");
+    expect(current?.expenseCents).toBe(-2000n); // nur Lebensmittel, nicht die -10000 Sparen-Buchung
+  });
 });
