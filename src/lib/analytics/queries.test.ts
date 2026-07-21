@@ -30,6 +30,7 @@ describe("getDashboardData", () => {
     foodId = food.id;
     await tx("2026-07-05", -3000n, foodId);
     await tx("2026-07-10", -2000n, foodId);
+    await tx("2026-07-12", -1500n); // unkategorisierte Ausgabe
     await tx("2026-07-15", 250000n);
     await tx("2026-07-20", -100000n, undefined, true); // Umbuchung -> ausgeschlossen
   });
@@ -42,13 +43,19 @@ describe("getDashboardData", () => {
   it("computes month income and expenses excluding transfers", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
     expect(d.incomeMonthCents).toBe(250000n);
-    expect(d.expensesMonthCents).toBe(-5000n); // Umbuchung -100000 nicht enthalten
+    expect(d.expensesMonthCents).toBe(-6500n); // Umbuchung -100000 nicht enthalten
   });
 
   it("rolls expenses up to the top-level category", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
     const food = d.byCategory.find((c) => c.name === "Lebensmittel");
     expect(food?.sumCents).toBe(-5000n);
+  });
+
+  it("adds an uncategorized-expenses slice, excluding transfers", async () => {
+    const d = await getDashboardData(new Date("2026-07-25"));
+    const uncat = d.byCategory.find((c) => c.name === "Nicht kategorisiert");
+    expect(uncat?.sumCents).toBe(-1500n); // nur die -1500 Ausgabe, nicht die Umbuchung
   });
 
   it("returns a 6-month trend ending in the current month", async () => {

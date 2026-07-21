@@ -30,9 +30,12 @@ export function CategoryDonut({ data }: { data: DonutSlice[] }) {
     );
   }
   const total = data.reduce((s, d) => s + d.value, 0);
-  const colored = data.map((d, i) => ({
+  // DS-Palette der Reihe nach; ein durchgereichtes var()-Token (z. B. der
+  // "Nicht kategorisiert"-Slice) behält seine eigene Farbe.
+  let paletteIdx = 0;
+  const colored = data.map((d) => ({
     ...d,
-    color: chartColorAt(i),
+    color: d.color.startsWith("var(") ? d.color : chartColorAt(paletteIdx++),
   }));
 
   return (

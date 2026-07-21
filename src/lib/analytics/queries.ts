@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, lt, sql, isNotNull } from "drizzle-orm";
+import { and, eq, gte, lte, lt, sql, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, categories, merchants, recurringItems, transactions } from "@/db/schema";
 
@@ -96,12 +96,23 @@ export async function getDashboardData(
     const topId = c.parentId ?? c.id;
     rollup.set(topId, (rollup.get(topId) ?? 0n) + BigInt(r.sum));
   }
-  const byCategory: CategorySlice[] = [...rollup.entries()]
-    .map(([categoryId, sumCents]) => {
-      const c = catById.get(categoryId);
-      return { categoryId, name: c?.name ?? "Sonstiges", color: c?.color ?? "#94a3b8", sumCents };
-    })
-    .sort((a, b) => Number(a.sumCents - b.sumCents)); // negativ -> größte Ausgabe zuerst
+  const byCategory: CategorySlice[] = [...rollup.entries()].map(([categoryId, sumCents]) => {
+    const c = catById.get(categoryId);
+    return { categoryId, name: c?.name ?? "Sonstiges", color: c?.color ?? "#94a3b8", sumCents };
+  });
+
+  // Unkategorisierte Ausgaben als eigener Sammel-Slice, damit der Donut auch vor
+  // der Kategorisierung etwas zeigt und sichtbar macht, was noch offen ist.
+  const [uncat] = await db
+    .select({ sum: sql<string>`coalesce(sum(${transactions.amountCents}), 0)` })
+    .from(transactions)
+    .where(and(inRange, lt(transactions.amountCents, 0n), isNull(transactions.categoryId), eq(transactions.isTransfer, false)));
+  const uncatCents = BigInt(uncat?.sum ?? "0");
+  if (uncatCents < 0n) {
+    byCategory.push({ categoryId: "__uncat__", name: "Nicht kategorisiert", color: "var(--uncat)", sumCents: uncatCents });
+  }
+
+  byCategory.sort((a, b) => Number(a.sumCents - b.sumCents)); // negativ -> größte Ausgabe zuerst
 
   // 6-Monats-Trend.
   const trendFrom = `${ymKey(today.getFullYear(), today.getMonth() - 5)}-01`;
