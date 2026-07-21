@@ -40,9 +40,6 @@ export interface DashboardData {
   periodTo: string;
 }
 
-function monthStart(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
 /** "YYYY-MM" rein arithmetisch (kein toISOString -> keine TZ-Verschiebung). */
 function ymKey(year: number, monthIndex: number): string {
   const total = year * 12 + monthIndex;
