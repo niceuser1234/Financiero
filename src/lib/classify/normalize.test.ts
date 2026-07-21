@@ -75,3 +75,11 @@ describe("isNonRecurringBrand", () => {
     expect(isNonRecurringBrand("Netflix")).toBe(false);
   });
 });
+
+describe("matchBrand subscription override", () => {
+  it("forces subscription false for blocklisted brands, keeps real subs true", () => {
+    expect(matchBrand("nextbike")?.subscription).toBe(false);
+    expect(matchBrand("spotify")?.subscription).toBe(true);
+    expect(matchBrand("netflix")?.subscription).toBe(true);
+  });
+});
