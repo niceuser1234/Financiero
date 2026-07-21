@@ -20,8 +20,9 @@ import type { PaymentPoint, RecurringDTO, RecurringOverview } from "@/lib/recurr
 
 type Tab = "aktiv" | "einnahmen" | "beendet";
 
-const CADENCE_SECTIONS: { key: "monthly" | "quarterly" | "yearly"; label: string }[] = [
+const CADENCE_SECTIONS: { key: "monthly" | "bimonthly" | "quarterly" | "yearly"; label: string }[] = [
   { key: "monthly", label: "Monatlich" },
+  { key: "bimonthly", label: "Alle 2 Monate" },
   { key: "quarterly", label: "Vierteljährlich" },
   { key: "yearly", label: "Jährlich" },
 ];
@@ -49,10 +50,11 @@ function CardsGrid({ items, onSelect }: { items: RecurringDTO[]; onSelect: (item
                 <div className="mt-0.5 text-xs text-ink-400">
                   {c.cadenceLabel}
                   {c.nextRelative && c.status === "active" && ` · nächste ${c.nextRelative}`}
+                  {c.cadence !== "monthly" && c.kind !== "income" && ` · ${c.monthlyHint}`}
                 </div>
               </div>
               <Money.Text
-                value={c.monthlyEquivFmt}
+                value={c.perChargeFmt}
                 tone={c.kind === "income" ? "income" : "neutral"}
                 className="min-w-[104px] text-right"
               />
@@ -147,12 +149,13 @@ export function ContractsView({ overview }: { overview: RecurringOverview }) {
               <div className="space-y-5 px-4 pb-8">
                 <div>
                   <Money.Text
-                    value={selected.monthlyEquivFmt}
+                    value={selected.perChargeFmt}
                     tone={selected.kind === "income" ? "income" : "neutral"}
                     className="text-3xl"
                   />
                   <div className="text-sm text-ink-500">
-                    pro Monat · {selected.cadenceLabel} · zuletzt {selected.amountLastFmt}
+                    {selected.cadenceLabel}
+                    {selected.cadence !== "monthly" && ` · ${selected.monthlyHint}`}
                   </div>
                 </div>
 
