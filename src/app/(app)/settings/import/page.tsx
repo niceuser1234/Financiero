@@ -8,7 +8,7 @@ export default async function ImportPage() {
     <>
       <PageHeader
         title="CSV-Import"
-        description="Umsätze aus DKB, Revolut oder PayPal importieren. Doppelte werden automatisch übersprungen."
+        lead="Umsätze aus DKB, Revolut oder PayPal importieren. Doppelte werden automatisch übersprungen."
       />
       <ImportForm accounts={accounts} />
     </>

@@ -6,10 +6,12 @@ export const dynamic = "force-dynamic";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex min-h-dvh bg-background">
       <Sidebar />
-      <div className="flex-1 pb-16 md:pb-0">
-        <main className="mx-auto max-w-5xl px-4 py-6 md:px-8">{children}</main>
+      <div className="min-w-0 flex-1 pb-20 md:pb-0">
+        <main className="mx-auto max-w-6xl px-4 py-8 md:px-[var(--page-pad-x)] md:py-[var(--page-pad-y)]">
+          {children}
+        </main>
       </div>
       <BottomTabs />
       <Toaster position="top-center" richColors />

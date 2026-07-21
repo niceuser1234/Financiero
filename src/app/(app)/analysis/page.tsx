@@ -6,7 +6,7 @@ export default async function AnalysisPage() {
   const initial = await getAnalyticsDTO();
   return (
     <>
-      <PageHeader title="Analyse" description="Wofür dein Geld draufgeht." />
+      <PageHeader title="Analyse" lead="Wofür dein Geld draufgeht." />
       <AnalysisView initial={initial} />
     </>
   );

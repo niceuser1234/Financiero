@@ -14,7 +14,7 @@ export default async function TransactionsPage() {
 
   return (
     <>
-      <PageHeader title="Transaktionen" description="Alle Buchungen an einem Ort." />
+      <PageHeader title="Transaktionen" lead="Alle Buchungen an einem Ort." />
       <TxView initialPage={initialPage} accounts={accounts} categories={categories} />
     </>
   );

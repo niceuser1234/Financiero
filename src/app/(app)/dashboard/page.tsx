@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { Repeat, Wallet } from "lucide-react";
@@ -23,10 +24,11 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between">
-        <PageHeader title="Dashboard" description="Überblick über deine Finanzen." />
-        <SyncButton />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        lead="Überblick über deine Finanzen."
+        right={<SyncButton />}
+      />
 
       {warnings.map((w) => (
         <Link key={w.aspspName} href="/settings/connections">

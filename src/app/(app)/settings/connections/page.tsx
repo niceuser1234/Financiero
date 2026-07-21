@@ -26,10 +26,11 @@ export default async function ConnectionsPage({
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between">
-        <PageHeader title="Bankverbindungen" description="DKB und Revolut via Enable Banking (PSD2)." />
-        <SyncButton />
-      </div>
+      <PageHeader
+        title="Bankverbindungen"
+        lead="DKB und Revolut via Enable Banking (PSD2)."
+        right={<SyncButton />}
+      />
 
       {sp.connected && (
         <p className="mb-4 rounded-md bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">

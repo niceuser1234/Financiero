@@ -16,7 +16,7 @@ export default async function ReviewPage() {
     <>
       <PageHeader
         title="Review-Queue"
-        description="KI-Zuordnungen mit niedriger Sicherheit (< 70 %). Korrigieren erstellt eine dauerhafte Regel."
+        lead="KI-Zuordnungen mit niedriger Sicherheit (< 70 %). Korrigieren erstellt eine dauerhafte Regel."
       />
       {initialPage.count === 0 ? (
         <p className="text-sm text-muted-foreground">Nichts zu prüfen — alle Zuordnungen sind sicher.</p>

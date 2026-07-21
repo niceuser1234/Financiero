@@ -6,7 +6,7 @@ export default async function ContractsPage() {
   const overview = await listRecurring();
   return (
     <>
-      <PageHeader title="Verträge" description="Abos und wiederkehrende Zahlungen." />
+      <PageHeader title="Verträge" lead="Abos und wiederkehrende Zahlungen." />
       <ContractsView overview={overview} />
     </>
   );
