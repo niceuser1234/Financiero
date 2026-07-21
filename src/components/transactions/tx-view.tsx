@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { ArrowDownWideNarrow, Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,8 +24,6 @@ import {
   type TxPage,
 } from "@/lib/transactions/actions";
 
-type Account = { id: string; name: string };
-
 const DATE_PRESETS: { label: string; days: number | null }[] = [
   { label: "30 Tage", days: 30 },
   { label: "3 Monate", days: 90 },
@@ -39,21 +37,19 @@ function isoDaysAgo(days: number): string {
 
 export function TxView({
   initialPage,
-  accounts,
   categories,
   baseFilter,
 }: {
   initialPage: TxPage;
-  accounts: Account[];
   categories: PickerCategory[];
   baseFilter?: Partial<SerializableFilter>;
 }) {
   const [q, setQ] = useState("");
-  const [accountIds, setAccountIds] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [direction, setDirection] = useState<"all" | "in" | "out">("all");
   const [presetDays, setPresetDays] = useState<number | null>(90);
   const [includeTransfers, setIncludeTransfers] = useState(false);
+  const [sort, setSort] = useState<"date" | "amount">("date");
 
   const [page, setPage] = useState<TxPage>(initialPage);
   const [items, setItems] = useState<TxDTO[]>(initialPage.items);
@@ -65,14 +61,14 @@ export function TxView({
     () => ({
       ...baseFilter,
       q: q || undefined,
-      accountIds: accountIds.length ? accountIds : undefined,
       categoryIds: categoryId ? [categoryId] : undefined,
       direction: direction === "all" ? undefined : direction,
       from: presetDays ? isoDaysAgo(presetDays) : undefined,
       includeTransfers,
+      sort: sort === "date" ? undefined : sort,
       limit: 50,
     }),
-    [q, accountIds, categoryId, direction, presetDays, includeTransfers, baseFilter],
+    [q, categoryId, direction, presetDays, includeTransfers, sort, baseFilter],
   );
 
   useEffect(() => {
@@ -135,13 +131,12 @@ export function TxView({
         clear: () => setIncludeTransfers(false),
       });
     }
-    for (const id of accountIds) {
-      const name = accounts.find((a) => a.id === id)?.name ?? id;
+    if (sort !== "date") {
       chips.push({
-        key: `account-${id}`,
-        label: "Konto",
-        value: name,
-        clear: () => setAccountIds((cur) => cur.filter((x) => x !== id)),
+        key: "sort",
+        label: "Sortierung",
+        value: "Größte Beträge",
+        clear: () => setSort("date"),
       });
     }
     if (q.trim()) {
@@ -153,7 +148,7 @@ export function TxView({
       });
     }
     return chips;
-  }, [direction, presetDays, categoryId, includeTransfers, accountIds, accounts, categories, q]);
+  }, [direction, presetDays, categoryId, includeTransfers, sort, categories, q]);
 
   return (
     <div className="space-y-4">
@@ -203,23 +198,13 @@ export function TxView({
         >
           Umbuchungen
         </FilterPill>
-        {accounts.length > 1 &&
-          accounts.map((a) => {
-            const active = accountIds.includes(a.id);
-            return (
-              <FilterPill
-                key={a.id}
-                active={active}
-                onClick={() =>
-                  setAccountIds((cur) =>
-                    active ? cur.filter((x) => x !== a.id) : [...cur, a.id],
-                  )
-                }
-              >
-                {a.name}
-              </FilterPill>
-            );
-          })}
+        <FilterPill
+          active={sort === "amount"}
+          icon={ArrowDownWideNarrow}
+          onClick={() => setSort((v) => (v === "amount" ? "date" : "amount"))}
+        >
+          Größte Beträge
+        </FilterPill>
       </div>
 
       {activeFilters.length > 0 && (

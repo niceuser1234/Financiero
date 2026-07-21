@@ -14,6 +14,8 @@ export interface TxFilter {
   includeTransfers?: boolean;
   /** Nur unsichere KI-Zuordnungen (confidence < 0.7). */
   needsReview?: boolean;
+  /** Sortierung: "date" (Standard, neueste zuerst) oder "amount" (größter Betrag zuerst). */
+  sort?: "date" | "amount";
   cursor?: string;
   limit?: number;
 }
@@ -79,6 +81,8 @@ function buildWhere(f: TxFilter): SQL | undefined {
 export async function listTransactions(f: TxFilter): Promise<TxListResult> {
   const limit = f.limit ?? DEFAULT_LIMIT;
   const baseWhere = buildWhere(f);
+  const sort = f.sort ?? "date";
+  const absAmount = sql<bigint>`abs(${transactions.amountCents})`;
 
   // Aggregate über die gesamte gefilterte Menge (ohne Cursor).
   const [agg] = await db
@@ -90,16 +94,25 @@ export async function listTransactions(f: TxFilter): Promise<TxListResult> {
     .leftJoin(merchants, eq(transactions.merchantId, merchants.id))
     .where(baseWhere);
 
-  // Keyset-Cursor "bookingDate|id" (absteigend).
+  // Keyset-Cursor. Bei "date": "bookingDate|id"; bei "amount": "absBetrag|id".
+  // Jeweils absteigend, damit "Mehr laden" stabil weiterblättert.
   let pageWhere = baseWhere;
   if (f.cursor) {
-    const [cd, cid] = f.cursor.split("|");
-    const keyset = or(
-      lt(transactions.bookingDate, cd),
-      and(eq(transactions.bookingDate, cd), lt(transactions.id, cid)),
-    );
+    const [ck, cid] = f.cursor.split("|");
+    const keyset =
+      sort === "amount"
+        ? or(lt(absAmount, BigInt(ck)), and(eq(absAmount, BigInt(ck)), lt(transactions.id, cid)))
+        : or(
+            lt(transactions.bookingDate, ck),
+            and(eq(transactions.bookingDate, ck), lt(transactions.id, cid)),
+          );
     pageWhere = baseWhere ? and(baseWhere, keyset) : keyset;
   }
+
+  const orderBy =
+    sort === "amount"
+      ? [desc(absAmount), desc(transactions.id)]
+      : [desc(transactions.bookingDate), desc(transactions.id)];
 
   const rows = await db
     .select({
@@ -123,13 +136,17 @@ export async function listTransactions(f: TxFilter): Promise<TxListResult> {
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(merchants, eq(transactions.merchantId, merchants.id))
     .where(pageWhere)
-    .orderBy(desc(transactions.bookingDate), desc(transactions.id))
+    .orderBy(...orderBy)
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
   const last = items.at(-1);
-  const nextCursor = hasMore && last ? `${last.bookingDate}|${last.id}` : null;
+  const nextCursor = hasMore && last
+    ? sort === "amount"
+      ? `${last.amountCents < 0n ? -last.amountCents : last.amountCents}|${last.id}`
+      : `${last.bookingDate}|${last.id}`
+    : null;
 
   return {
     items,

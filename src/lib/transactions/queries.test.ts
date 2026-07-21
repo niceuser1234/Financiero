@@ -63,6 +63,22 @@ describe("listTransactions", () => {
     expect(r.items[0].counterpartyName).toBe("Netflix");
   });
 
+  it("sorts by amount (largest absolute first)", async () => {
+    const r = await listTransactions({ accountIds: [accountId], sort: "amount" });
+    const abs = r.items.map((i) => (i.amountCents < 0n ? -i.amountCents : i.amountCents));
+    expect(abs).toEqual([250000n, 2000n, 1000n, 750n, 500n]);
+  });
+
+  it("paginates amount-sorted results with a stable keyset (no gaps or dupes)", async () => {
+    const p1 = await listTransactions({ accountIds: [accountId], sort: "amount", limit: 2 });
+    const p2 = await listTransactions({ accountIds: [accountId], sort: "amount", limit: 2, cursor: p1.nextCursor! });
+    const p3 = await listTransactions({ accountIds: [accountId], sort: "amount", limit: 2, cursor: p2.nextCursor! });
+    const abs = [...p1.items, ...p2.items, ...p3.items].map((i) => (i.amountCents < 0n ? -i.amountCents : i.amountCents));
+    expect(abs).toEqual([250000n, 2000n, 1000n, 750n, 500n]);
+    expect(new Set([...p1.items, ...p2.items, ...p3.items].map((i) => i.id)).size).toBe(5);
+    expect(p3.nextCursor).toBeNull();
+  });
+
   it("paginates with a stable keyset cursor (no gaps or dupes)", async () => {
     const p1 = await listTransactions({ accountIds: [accountId], limit: 2 });
     expect(p1.items).toHaveLength(2);
