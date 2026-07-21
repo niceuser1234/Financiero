@@ -1,3 +1,5 @@
+import { isNonRecurringBrand } from "@/lib/classify/normalize";
+
 export interface RecurringTx {
   id: string;
   bookingDate: string;
@@ -42,9 +44,6 @@ const CONTRACT_AMOUNT_FLOOR = 5000n; // 50 EUR
 /**
  * Retail/marketplace/cashflow noise: no recurring detection without subscription hint.
  */
-const NON_RECURRING_LABELS =
-  /\b(rewe|aldi|lidl|edeka|rossmann|\bdm\b|konsum|amazon|vinted|kleiderkreisel|paypal|deutsche bahn|db vertrieb|getkong|playtomic|nextbike|studentenwerk|mc doener|doener|einzahlung|kartenpreis|dkb)\b/i;
-
 function diffDays(a: string, b: string): number {
   return (Date.parse(b) - Date.parse(a)) / DAY;
 }
@@ -176,7 +175,7 @@ function inferKind(
 }
 
 function isBlockedRetail(label: string | undefined): boolean {
-  return NON_RECURRING_LABELS.test(label ?? "");
+  return isNonRecurringBrand(label ?? "");
 }
 
 /** Without subscription hint: at least 80% of intervals must fall into the same cadence bucket. */
@@ -281,4 +280,3 @@ export function detectRecurring(groups: FingerprintGroup[], today: string): Recu
 
   return out;
 }
-

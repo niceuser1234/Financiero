@@ -8,7 +8,7 @@ const BOILERPLATE = [
 
 /** Retail/marketplace/cashflow noise — never a subscription/contract. */
 export const NON_RECURRING_BRAND =
-  /\b(rewe|aldi|lidl|edeka|rossmann|\bdm\b|konsum|amazon|vinted|kleiderkreisel|paypal|deutsche bahn|db vertrieb|getkong|playtomic|nextbike|studentenwerk|mc doener|doener|einzahlung|kartenpreis|dkb)\b/i;
+  /\b(rewe|aldi|lidl|edeka|rossmann|\bdm\b|konsum|amazon|vinted|kleiderkreisel|paypal|deutsche bahn|db vertrieb|getkong|playtomic|nextbike|studentenwerk|mc[ -]?(?:doener|döner)|doener|döner|einzahlung|kartenpreis|dkb)\b/i;
 
 export function isNonRecurringBrand(text: string): boolean {
   return NON_RECURRING_BRAND.test(text ?? "");

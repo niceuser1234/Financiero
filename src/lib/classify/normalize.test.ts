@@ -66,7 +66,7 @@ describe("matchBrand / brandKeyOf", () => {
 
 describe("isNonRecurringBrand", () => {
   it("flags retail/food/marketplace merchants", () => {
-    for (const s of ["REWE Markt", "ALDI SUED", "Konsum Leipzig", "Deutsche Bahn", "dm-drogerie", "MC DOENER"]) {
+    for (const s of ["REWE Markt", "ALDI SUED", "Konsum Leipzig", "Deutsche Bahn", "dm-drogerie", "MC DOENER", "MC Döner"]) {
       expect(isNonRecurringBrand(s)).toBe(true);
     }
   });
