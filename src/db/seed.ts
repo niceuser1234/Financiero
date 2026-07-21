@@ -7,7 +7,7 @@ type SeedCat = {
   parent?: string;
   icon?: string;
   color?: string;
-  kind?: "expense" | "income" | "transfer" | "excluded";
+  kind?: "expense" | "income" | "transfer" | "excluded" | "saving";
 };
 
 // Taxonomie aus Spec §7.4 — 16 Hauptkategorien mit Unterkategorien.
@@ -75,7 +75,8 @@ const TAXONOMY: SeedCat[] = [
   { slug: "freizeit-reisen-hobby", name: "Hobby", parent: "freizeit-reisen" },
 
   { slug: "bildung", name: "Bildung", icon: "graduation-cap", color: "#6366f1" },
-  { slug: "sparen-investieren", name: "Sparen & Investieren", icon: "piggy-bank", color: "#84cc16", kind: "excluded" },
+  { slug: "sparen-investieren", name: "Sparen & Investieren", icon: "piggy-bank", color: "#84cc16", kind: "saving" },
+  { slug: "sparen-investieren-sparen", name: "Sparen", parent: "sparen-investieren", kind: "saving" },
   { slug: "bargeld", name: "Bargeld", icon: "banknote", color: "#a3a3a3" },
   { slug: "gebuehren-zinsen", name: "Gebühren & Zinsen", icon: "percent", color: "#dc2626" },
 
@@ -121,6 +122,34 @@ async function main() {
         sort: ++i,
       })
       .onConflictDoNothing({ target: categories.slug });
+  }
+
+  // bySlug erneut auffrischen: enthält nach dem obigen Insert-Loop auch neu angelegte Unterkategorien
+  // (der obige onConflictDoNothing-Insert liefert kein returning(), also sonst fehlt die frisch erzeugte ID).
+  for (const row of await db.select().from(categories)) bySlug.set(row.slug, row.id);
+
+  // Idempotenter Abgleich: kind von sparen-investieren aktualisieren (onConflict oben updated nicht).
+  const { eq } = await import("drizzle-orm");
+  await db.update(categories).set({ kind: "saving" }).where(eq(categories.slug, "sparen-investieren"));
+
+  // Sparplan-Regel seeden: Verwendungszweck enthält "Sparplan" -> Sparen.
+  const { categoryRules } = await import("./schema");
+  const sparenId = bySlug.get("sparen-investieren-sparen");
+  if (sparenId) {
+    const existing = await db
+      .select()
+      .from(categoryRules)
+      .where(eq(categoryRules.value, "Sparplan"));
+    if (existing.length === 0) {
+      await db.insert(categoryRules).values({
+        field: "purpose",
+        op: "contains",
+        value: "Sparplan",
+        categoryId: sparenId,
+        createdFrom: "manual",
+        priority: 10,
+      });
+    }
   }
 
   const count = (await db.select().from(categories)).length;
