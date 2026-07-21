@@ -88,6 +88,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="dkb">DKB Girokonto</SelectItem>
+              <SelectItem value="dkb_visa">DKB Visa Kreditkarte</SelectItem>
               <SelectItem value="revolut">Revolut</SelectItem>
               <SelectItem value="paypal">PayPal</SelectItem>
             </SelectContent>

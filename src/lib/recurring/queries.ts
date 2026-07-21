@@ -32,6 +32,24 @@ export interface RecurringOverview {
   ended: RecurringDTO[];
   totalMonthlyFmt: string;
   activeCount: number;
+  activeByCadence: ActiveByCadence;
+}
+
+export interface ActiveByCadence {
+  monthly: RecurringDTO[];
+  quarterly: RecurringDTO[];
+  yearly: RecurringDTO[];
+}
+
+/** Bucketet aktive Verträge nach Kadenz; weekly wird zu monthly gefaltet. */
+export function groupByCadence(items: RecurringDTO[]): ActiveByCadence {
+  const g: ActiveByCadence = { monthly: [], quarterly: [], yearly: [] };
+  for (const r of items) {
+    if (r.cadence === "quarterly") g.quarterly.push(r);
+    else if (r.cadence === "yearly") g.yearly.push(r);
+    else g.monthly.push(r); // monthly + weekly
+  }
+  return g;
 }
 
 function relative(dateISO: string | null): string | null {
@@ -106,6 +124,7 @@ export async function listRecurring(): Promise<RecurringOverview> {
   const ended = all.filter((r) => r.status === "ended");
 
   const totalMonthlyCents = subscriptions.reduce((sum, r) => sum - BigInt(Math.round(r.monthlyEquivAbs)), 0n);
+  const activeByCadence = groupByCadence(subscriptions);
 
   return {
     subscriptions,
@@ -113,6 +132,7 @@ export async function listRecurring(): Promise<RecurringOverview> {
     ended,
     totalMonthlyFmt: formatCents(totalMonthlyCents),
     activeCount: subscriptions.length,
+    activeByCadence,
   };
 }
 

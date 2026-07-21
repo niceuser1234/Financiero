@@ -13,6 +13,7 @@ export interface AnalyticsDTO {
   incomeFmt: string;
   expensesFmt: string;
   subsFmt: string;
+  savingFmt: string;
   donut: DonutSlice[];
   trend: TrendBar[];
   topMerchants: { name: string; fmt: string; count: number }[];
@@ -35,6 +36,7 @@ export async function getAnalyticsDTO(range?: { from: string; to: string }): Pro
     incomeFmt: formatCents(d.incomeMonthCents),
     expensesFmt: formatCents(d.expensesMonthCents),
     subsFmt: formatCents(d.subsMonthlyCents),
+    savingFmt: formatCents(d.savingMonthCents),
     donut: d.byCategory.map<DonutSlice>((c) => ({
       name: c.name,
       color: c.color,

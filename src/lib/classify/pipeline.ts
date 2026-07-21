@@ -8,9 +8,7 @@ import { runRecurringDetection } from "@/lib/recurring/apply";
 
 /**
  * Quellenunabhängige Nachverarbeitung nach jedem Sync/Import (Spec §4):
- * unwrap (in fingerprintOf eingebettet) → transfer-match → rules → llm-batch.
- * Recurring-Detection wird in Phase 6 ergänzt.
- * Ergebnisse eines LLM-Batches werden asynchron beim nächsten Cron-Poll angewandt.
+ * unwrap (in fingerprintOf eingebettet) → transfer-match → rules → synchrone LLM-Klassifizierung (Fehler geloggt, brechen nicht ab) → recurring-detection.
  */
 export async function runPipeline(insertedTxIds: string[]): Promise<void> {
   const since = await earliestBookingDate(insertedTxIds);
@@ -18,8 +16,9 @@ export async function runPipeline(insertedTxIds: string[]): Promise<void> {
   await applyRules();
   try {
     await classifyUnknownFingerprints();
-  } catch {
-    // Kein API-Key / API-Fehler soll den Sync nicht abbrechen.
+  } catch (e) {
+    // Klassifizierung darf den Import nicht abbrechen — aber Fehler sichtbar loggen.
+    console.error("Klassifizierung fehlgeschlagen:", (e as Error).message);
   }
   await runRecurringDetection();
 }

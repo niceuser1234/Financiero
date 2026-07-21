@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
-import { Calendar, Landmark, Repeat, Wallet } from "lucide-react";
+import { Calendar, Landmark, PiggyBank, Repeat, Wallet } from "lucide-react";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
@@ -10,6 +10,7 @@ import { Money } from "@/components/ds/money";
 import { TransactionRow } from "@/components/ds/transaction-row";
 import { SyncButton } from "@/components/sync-button";
 import { CategoryDonut } from "@/components/charts/category-donut";
+import { ReclassifyBanner } from "@/components/classify/reclassify-banner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { getAnalyticsDTO, getConsentWarnings } from "@/lib/analytics/actions";
 import { fetchTransactions } from "@/lib/transactions/actions";
+import { getUnclassifiedCount } from "@/lib/classify/actions";
 
 export default async function DashboardPage() {
   // Server page: default window is "last 90 days" relative to request time.
@@ -28,7 +30,7 @@ export default async function DashboardPage() {
   from90.setUTCDate(from90.getUTCDate() - 90);
   const from = from90.toISOString().slice(0, 10);
 
-  const [dto, warnings, accounts, review, recent] = await Promise.all([
+  const [dto, warnings, accounts, review, recent, unclassified] = await Promise.all([
     getAnalyticsDTO(),
     getConsentWarnings(),
     db.select().from(bankAccounts).orderBy(asc(bankAccounts.name)),
@@ -38,6 +40,7 @@ export default async function DashboardPage() {
       includeTransfers: false,
       limit: 5,
     }),
+    getUnclassifiedCount(),
   ]);
 
   return (
@@ -58,6 +61,8 @@ export default async function DashboardPage() {
         </Link>
       ))}
 
+      <ReclassifyBanner count={unclassified} />
+
       {review.count > 0 && (
         <Link href="/settings/review">
           <p className="mb-3 rounded-md bg-review-soft px-4 py-3 text-sm text-review">
@@ -67,10 +72,11 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label="Gesamtsaldo" value={dto.totalBalanceFmt} tone="accent" icon={Wallet} />
         <KpiCard label="Einnahmen / Monat" value={dto.incomeFmt} tone="income" />
         <KpiCard label="Ausgaben / Monat" value={dto.expensesFmt} tone="expense" />
+        <KpiCard label="Sparen / Monat" value={dto.savingFmt} tone="neutral" icon={PiggyBank} />
         <KpiCard label="Abos / Monat" value={dto.subsFmt} tone="neutral" icon={Repeat} />
       </div>
 
@@ -167,7 +173,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Anstehende Abbuchungen</CardTitle>
-            <CardDescription>Nächste 14 Tage</CardDescription>
+            <CardDescription>Nächste 2 Abbuchungen</CardDescription>
           </CardHeader>
           <CardContent>
             {dto.upcoming.length === 0 ? (
@@ -175,7 +181,7 @@ export default async function DashboardPage() {
                 compact
                 icon={Calendar}
                 title="Nichts in Sicht"
-                message="In den nächsten 14 Tagen steht keine Abbuchung an."
+                message="Noch keine wiederkehrenden Abbuchungen erkannt."
               />
             ) : (
               dto.upcoming.map((u, i) => (

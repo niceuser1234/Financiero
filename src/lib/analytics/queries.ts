@@ -32,6 +32,7 @@ export interface DashboardData {
   trend: TrendPoint[];
   topMerchants: MerchantSlice[];
   upcoming: UpcomingItem[];
+  savingMonthCents: bigint;
 }
 
 function monthStart(d: Date): string {
@@ -44,10 +45,6 @@ function ymKey(year: number, monthIndex: number): string {
   const m = total - y * 12;
   return `${y}-${String(m + 1).padStart(2, "0")}`;
 }
-function addDaysISO(d: Date, days: number): string {
-  return new Date(d.getTime() + days * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
 /** Aggregierte Kennzahlen fürs Dashboard. `from`/`to` optional (Default: laufender Monat). */
 export async function getDashboardData(
   today = new Date(),
@@ -64,13 +61,16 @@ export async function getDashboardData(
     .select({ sum: sql<string>`coalesce(sum(${bankAccounts.balanceCents}), 0)` })
     .from(bankAccounts);
 
-  // Einnahmen / Ausgaben im Zeitraum.
+  // Einnahmen / Ausgaben im Zeitraum — Spar-/ausgeschlossene/Transfer-Kategorien zählen nicht als Ausgabe.
+  const excludedKinds = sql`coalesce(${categories.kind}, 'expense') in ('saving','excluded','transfer')`;
   const [flow] = await db
     .select({
-      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 then ${transactions.amountCents} else 0 end), 0)`,
-      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 then ${transactions.amountCents} else 0 end), 0)`,
+      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
+      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
+      saving: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and coalesce(${categories.kind}, 'expense') = 'saving' then ${transactions.amountCents} else 0 end), 0)`,
     })
     .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(inRange);
 
   // Monatliche Abo-Last (aktive, nicht Einkommen).
@@ -92,7 +92,7 @@ export async function getDashboardData(
   for (const r of catRows) {
     if (!r.categoryId) continue;
     const c = catById.get(r.categoryId);
-    if (!c || c.kind === "transfer" || c.kind === "excluded") continue;
+    if (!c || c.kind === "transfer" || c.kind === "excluded" || c.kind === "saving") continue;
     const topId = c.parentId ?? c.id;
     rollup.set(topId, (rollup.get(topId) ?? 0n) + BigInt(r.sum));
   }
@@ -119,10 +119,11 @@ export async function getDashboardData(
   const trendRows = await db
     .select({
       month: sql<string>`to_char(${transactions.bookingDate}::date, 'YYYY-MM')`,
-      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 then ${transactions.amountCents} else 0 end), 0)`,
-      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 then ${transactions.amountCents} else 0 end), 0)`,
+      income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
+      expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
     })
     .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(and(gte(transactions.bookingDate, trendFrom), notTransfer))
     .groupBy(sql`to_char(${transactions.bookingDate}::date, 'YYYY-MM')`);
   const trendMap = new Map(trendRows.map((r) => [r.month, r]));
@@ -153,7 +154,7 @@ export async function getDashboardData(
       .limit(5)
   ).map((r) => ({ name: r.name, sumCents: BigInt(r.sum), count: r.count }));
 
-  // Anstehende Abbuchungen (14 Tage).
+  // Anstehende Abbuchungen — zeitunabhängig, nur die nächsten 2.
   const upcoming = (
     await db
       .select({
@@ -168,11 +169,10 @@ export async function getDashboardData(
           eq(recurringItems.status, "active"),
           sql`${recurringItems.kind} <> 'income'`,
           isNotNull(recurringItems.nextExpectedDate),
-          gte(recurringItems.nextExpectedDate, today.toISOString().slice(0, 10)),
-          lte(recurringItems.nextExpectedDate, addDaysISO(today, 14)),
         ),
       )
       .orderBy(recurringItems.nextExpectedDate)
+      .limit(2)
   ).map((r) => ({ name: r.name, date: r.date!, amountCents: r.amount }));
 
   return {
@@ -184,5 +184,6 @@ export async function getDashboardData(
     trend,
     topMerchants,
     upcoming,
+    savingMonthCents: BigInt(flow?.saving ?? "0"),
   };
 }
