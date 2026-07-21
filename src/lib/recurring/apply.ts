@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, merchants, recurringItems, transactions } from "@/db/schema";
-import { brandKeyOf, fingerprintOf, matchBrand } from "@/lib/classify/normalize";
+import { brandKeyOf, fingerprintOf, isNonRecurringBrand, matchBrand } from "@/lib/classify/normalize";
 import { detectRecurring, type FingerprintGroup } from "./detect";
 
 /**
@@ -248,9 +248,24 @@ export async function runRecurringDetection(
     }
   }
 
-  const existing = await db.select().from(recurringItems);
+  const existing = await db
+    .select({
+      id: recurringItems.id,
+      merchantId: recurringItems.merchantId,
+      cadence: recurringItems.cadence,
+      status: recurringItems.status,
+      name: merchants.nameClean,
+    })
+    .from(recurringItems)
+    .innerJoin(merchants, eq(recurringItems.merchantId, merchants.id));
+
   for (const e of existing) {
-    if (!activeKeys.has(`${e.merchantId}|${e.cadence}`) && e.status !== "ended") {
+    const stillActive = activeKeys.has(`${e.merchantId}|${e.cadence}`);
+    if (isNonRecurringBrand(e.name)) {
+      // Falsch-Positiv (Supermarkt, Bahn …): ganz entfernen, nicht als "beendet" behalten.
+      await db.update(transactions).set({ recurringItemId: null }).where(eq(transactions.recurringItemId, e.id));
+      await db.delete(recurringItems).where(eq(recurringItems.id, e.id));
+    } else if (!stillActive && e.status !== "ended") {
       await db.update(recurringItems).set({ status: "ended" }).where(eq(recurringItems.id, e.id));
     }
   }
