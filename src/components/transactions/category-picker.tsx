@@ -12,11 +12,14 @@ export function CategoryPicker({
   value,
   onChange,
   triggerLabel,
+  trigger,
 }: {
   categories: PickerCategory[];
   value: string | null;
   onChange: (categoryId: string) => void;
   triggerLabel?: string;
+  /** Optional custom trigger; click opens the dialog. */
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -34,9 +37,15 @@ export function CategoryPicker({
 
   return (
     <>
-      <Button variant="outline" className="justify-start" onClick={() => setOpen(true)}>
-        {triggerLabel ?? current?.name ?? "Kategorie wählen"}
-      </Button>
+      {trigger ? (
+        <span className="inline-flex" onClick={() => setOpen(true)}>
+          {trigger}
+        </span>
+      ) : (
+        <Button variant="outline" className="justify-start" onClick={() => setOpen(true)}>
+          {triggerLabel ?? current?.name ?? "Kategorie wählen"}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[80dvh] overflow-hidden">
         <DialogHeader>

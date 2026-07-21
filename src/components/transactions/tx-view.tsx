@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Repeat, Search } from "lucide-react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
+import { FilterPill, FilterChip } from "@/components/ds/filter-pill";
+import { SegmentedControl } from "@/components/ds/segmented-control";
+import { EmptyState } from "@/components/ds/empty-state";
+import { TransactionRow } from "@/components/ds/transaction-row";
+import { Money } from "@/components/ds/money";
+import { formatCents } from "@/lib/money";
 import { CategoryPicker } from "./category-picker";
 import {
   fetchTransactions,
@@ -69,7 +75,6 @@ export function TxView({
     [q, accountIds, categoryId, direction, presetDays, includeTransfers, baseFilter],
   );
 
-  // Bei Filteränderung Seite 1 neu laden (Suche debounced).
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -96,30 +101,86 @@ export function TxView({
 
   const grouped = useMemo(() => groupByDate(items), [items]);
 
+  const activeFilters = useMemo(() => {
+    const chips: { key: string; label?: string; value: string; clear: () => void }[] = [];
+    if (direction !== "all") {
+      chips.push({
+        key: "direction",
+        label: "Richtung",
+        value: direction === "in" ? "Einnahmen" : "Ausgaben",
+        clear: () => setDirection("all"),
+      });
+    }
+    if (presetDays !== 90) {
+      const label = DATE_PRESETS.find((p) => p.days === presetDays)?.label ?? "Zeitraum";
+      chips.push({
+        key: "preset",
+        label: "Zeitraum",
+        value: label,
+        clear: () => setPresetDays(90),
+      });
+    }
+    if (categoryId) {
+      chips.push({
+        key: "category",
+        label: "Kategorie",
+        value: categories.find((c) => c.id === categoryId)?.name ?? "Kategorie",
+        clear: () => setCategoryId(null),
+      });
+    }
+    if (includeTransfers) {
+      chips.push({
+        key: "transfers",
+        value: "Umbuchungen",
+        clear: () => setIncludeTransfers(false),
+      });
+    }
+    for (const id of accountIds) {
+      const name = accounts.find((a) => a.id === id)?.name ?? id;
+      chips.push({
+        key: `account-${id}`,
+        label: "Konto",
+        value: name,
+        clear: () => setAccountIds((cur) => cur.filter((x) => x !== id)),
+      });
+    }
+    if (q.trim()) {
+      chips.push({
+        key: "q",
+        label: "Suche",
+        value: q.trim(),
+        clear: () => setQ(""),
+      });
+    }
+    return chips;
+  }, [direction, presetDays, categoryId, includeTransfers, accountIds, accounts, categories, q]);
+
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative w-full sm:w-[320px]">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-[17px] -translate-y-1/2 text-ink-400" />
         <Input
-          className="pl-9"
-          placeholder="Suche Händler oder Verwendungszweck…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          placeholder="Umsätze durchsuchen …"
+          className="pl-10"
         />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <ToggleGroup
+        <SegmentedControl
+          size="sm"
           options={[
-            { v: "all", l: "Alle" },
-            { v: "out", l: "Ausgaben" },
-            { v: "in", l: "Einnahmen" },
-          ]}
+            { value: "all", label: "Alle" },
+            { value: "out", label: "Ausgaben" },
+            { value: "in", label: "Einnahmen" },
+          ] as const}
           value={direction}
-          onChange={(v) => setDirection(v as typeof direction)}
+          onChange={setDirection}
         />
-        <ToggleGroup
-          options={DATE_PRESETS.map((p) => ({ v: String(p.days), l: p.label }))}
+        <SegmentedControl
+          size="sm"
+          options={DATE_PRESETS.map((p) => ({ value: String(p.days), label: p.label }))}
           value={String(presetDays)}
           onChange={(v) => setPresetDays(v === "null" ? null : Number(v))}
         />
@@ -127,87 +188,94 @@ export function TxView({
           categories={categories}
           value={categoryId}
           onChange={(id) => setCategoryId((cur) => (cur === id ? null : id))}
-          triggerLabel={categoryId ? categories.find((c) => c.id === categoryId)?.name : "Alle Kategorien"}
+          triggerLabel={
+            categoryId ? categories.find((c) => c.id === categoryId)?.name : "Kategorie"
+          }
+          trigger={
+            <FilterPill active={!!categoryId} dropdown icon={SlidersHorizontal}>
+              {categoryId ? categories.find((c) => c.id === categoryId)?.name : "Kategorie"}
+            </FilterPill>
+          }
         />
-        {categoryId && (
-          <Button variant="ghost" size="sm" onClick={() => setCategoryId(null)}>
-            ✕ Kategorie
-          </Button>
-        )}
-        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
-          <input type="checkbox" checked={includeTransfers} onChange={(e) => setIncludeTransfers(e.target.checked)} />
+        <FilterPill
+          active={includeTransfers}
+          onClick={() => setIncludeTransfers((v) => !v)}
+        >
           Umbuchungen
-        </label>
-      </div>
-
-      {accounts.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {accounts.map((a) => {
+        </FilterPill>
+        {accounts.length > 1 &&
+          accounts.map((a) => {
             const active = accountIds.includes(a.id);
             return (
-              <Button
+              <FilterPill
                 key={a.id}
-                variant={active ? "default" : "outline"}
-                size="sm"
+                active={active}
                 onClick={() =>
-                  setAccountIds((cur) => (active ? cur.filter((x) => x !== a.id) : [...cur, a.id]))
+                  setAccountIds((cur) =>
+                    active ? cur.filter((x) => x !== a.id) : [...cur, a.id],
+                  )
                 }
               >
                 {a.name}
-              </Button>
+              </FilterPill>
+            );
+          })}
+      </div>
+
+      {activeFilters.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {activeFilters.map((f) => (
+            <FilterChip key={f.key} label={f.label} value={f.value} onRemove={() => f.clear()} />
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between rounded-md bg-surface-sunken px-4 py-2 text-sm">
+        <span className="text-ink-500">{page.count} Buchungen</span>
+        <Money.Text value={page.sumFmt} className="text-sm" />
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState
+          title="Keine Umsätze gefunden"
+          message="Passe die Filter an oder importiere eine CSV-Datei."
+        />
+      ) : (
+        <div>
+          {grouped.map(([date, rows]) => {
+            const groupSum = rows.reduce((s, t) => s + t.amountCents, 0);
+            const groupSumFmt = formatCents(BigInt(groupSum));
+            return (
+              <div key={date}>
+                <div className="mt-6 mb-1 px-3 text-[11px] font-semibold tracking-[var(--tracking-label)] text-ink-400 uppercase first:mt-0">
+                  {formatDate(date)}
+                </div>
+                <div>
+                  {rows.map((t) => (
+                    <TransactionRow
+                      key={t.id}
+                      name={t.merchantName ?? t.counterpartyName ?? t.purpose ?? "Unbekannt"}
+                      meta={`${t.categoryName ?? "Nicht kategorisiert"} · ${formatShortDate(t.bookingDate)}`}
+                      amount={t.amountFmt}
+                      tone={t.negative ? "neutral" : "income"}
+                      category={t.categoryName}
+                      categoryTone={t.negative ? "secondary" : "income"}
+                      uncategorized={!t.categoryId && !t.isTransfer}
+                      review={t.confidence != null && t.confidence < 0.7}
+                      recurring={t.recurringItemId != null}
+                      onClick={() => setSelected(t)}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-hairline px-3 py-3">
+                  <span className="text-[13px] font-medium text-ink-500">Summe</span>
+                  <Money.Text value={groupSumFmt} className="min-w-[104px] text-right" />
+                </div>
+              </div>
             );
           })}
         </div>
       )}
-
-      <div className="flex items-center justify-between rounded-md bg-muted/50 px-4 py-2 text-sm">
-        <span className="text-muted-foreground">{page.count} Buchungen</span>
-        <span className="font-medium tabular-nums">Σ {page.sumFmt}</span>
-      </div>
-
-      <div className="space-y-6">
-        {grouped.map(([date, rows]) => (
-          <div key={date}>
-            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {formatDate(date)}
-            </div>
-            <div className="divide-y rounded-md border">
-              {rows.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelected(t)}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50"
-                >
-                  <span
-                    className="size-8 shrink-0 rounded-full"
-                    style={{ background: (t.categoryColor ?? "#94a3b8") + "33" }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 truncate font-medium">
-                      {t.merchantName ?? t.counterpartyName ?? "Unbekannt"}
-                      {t.recurringItemId && <Repeat className="size-3 text-muted-foreground" />}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {t.categoryName ?? "Nicht kategorisiert"}
-                    </span>
-                  </span>
-                  <span
-                    className={
-                      "shrink-0 tabular-nums font-medium " +
-                      (t.negative ? "text-foreground" : "text-emerald-600 dark:text-emerald-400")
-                    }
-                  >
-                    {t.amountFmt}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">Keine Buchungen für diese Auswahl.</p>
-        )}
-      </div>
 
       {page.nextCursor && (
         <div className="flex justify-center">
@@ -279,7 +347,11 @@ function DetailSheet({
               <SheetTitle>{tx.merchantName ?? tx.counterpartyName ?? "Buchung"}</SheetTitle>
             </SheetHeader>
             <div className="space-y-4 px-4 pb-8">
-              <div className="text-2xl font-semibold tabular-nums">{tx.amountFmt}</div>
+              <Money.Text
+                value={tx.amountFmt}
+                tone={tx.negative ? "neutral" : "income"}
+                className="text-2xl"
+              />
               <dl className="space-y-1.5 text-sm">
                 <Row label="Datum" value={formatDate(tx.bookingDate)} />
                 <Row label="Gegenpartei" value={tx.counterpartyName ?? "–"} />
@@ -299,15 +371,15 @@ function DetailSheet({
                 {tx.isTransfer && <Row label="Typ" value={<Badge variant="secondary">Umbuchung</Badge>} />}
               </dl>
 
-              <div className="space-y-2 border-t pt-4">
+              <div className="space-y-2 border-t border-hairline pt-4">
                 <Label>Kategorie ändern</Label>
                 <div className="flex flex-col gap-2">
                   <CategoryPicker categories={categories} value={catId} onChange={setCatId} />
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-sm text-ink-700">
                     <input type="checkbox" checked={createRule} onChange={(e) => setCreateRule(e.target.checked)} />
                     Regel für diesen Händler anlegen
                   </label>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-sm text-ink-700">
                     <input type="checkbox" checked={applyPast} onChange={(e) => setApplyPast(e.target.checked)} />
                     Auf vergangene Buchungen anwenden
                   </label>
@@ -327,35 +399,8 @@ function DetailSheet({
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="text-right">{value}</dd>
-    </div>
-  );
-}
-
-function ToggleGroup({
-  options,
-  value,
-  onChange,
-}: {
-  options: { v: string; l: string }[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-md border p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.v}
-          onClick={() => onChange(o.v)}
-          className={
-            "rounded px-2.5 py-1 text-sm transition-colors " +
-            (value === o.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")
-          }
-        >
-          {o.l}
-        </button>
-      ))}
+      <dt className="shrink-0 text-ink-500">{label}</dt>
+      <dd className="text-right text-ink-900">{value}</dd>
     </div>
   );
 }
@@ -371,7 +416,16 @@ function groupByDate(items: TxDTO[]): Array<[string, TxDTO[]]> {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("de-DE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
 }
 
 function sourceLabel(s: string): string {

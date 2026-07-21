@@ -12,6 +12,8 @@ export interface TxDTO {
   id: string;
   bookingDate: string;
   amountFmt: string;
+  /** Cents as number for client-side group sums (safe for typical transaction sizes). */
+  amountCents: number;
   negative: boolean;
   currency: string;
   counterpartyName: string | null;
@@ -59,6 +61,7 @@ export async function fetchTransactions(filter: SerializableFilter): Promise<TxP
       id: i.id,
       bookingDate: i.bookingDate,
       amountFmt: formatCents(i.amountCents, i.currency),
+      amountCents: Number(i.amountCents),
       negative: i.amountCents < 0n,
       currency: i.currency,
       counterpartyName: i.counterpartyName,
