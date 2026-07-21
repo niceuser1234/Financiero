@@ -1,7 +1,9 @@
 import { asc } from "drizzle-orm";
+import { CircleCheck } from "lucide-react";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/ds/empty-state";
 import { TxView } from "@/components/transactions/tx-view";
 import { fetchTransactions, getPickerCategories } from "@/lib/transactions/actions";
 
@@ -19,9 +21,19 @@ export default async function ReviewPage() {
         lead="KI-Zuordnungen mit niedriger Sicherheit (< 70 %). Korrigieren erstellt eine dauerhafte Regel."
       />
       {initialPage.count === 0 ? (
-        <p className="text-sm text-muted-foreground">Nichts zu prüfen — alle Zuordnungen sind sicher.</p>
+        <EmptyState
+          compact
+          icon={CircleCheck}
+          title="Nichts zu prüfen"
+          message="Alle Zuordnungen sind sicher."
+        />
       ) : (
-        <TxView initialPage={initialPage} accounts={accounts} categories={categories} baseFilter={{ needsReview: true }} />
+        <TxView
+          initialPage={initialPage}
+          accounts={accounts}
+          categories={categories}
+          baseFilter={{ needsReview: true }}
+        />
       )}
     </>
   );

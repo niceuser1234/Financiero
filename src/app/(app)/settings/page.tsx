@@ -11,7 +11,7 @@ export default async function SettingsPage() {
       <PageHeader title="Einstellungen" />
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/settings/connections">
-          <Card className="transition-colors hover:border-primary">
+          <Card className="transition-colors hover:border-[var(--accent)]">
             <CardHeader>
               <CardTitle className="text-base">Bankverbindungen</CardTitle>
             </CardHeader>
@@ -21,7 +21,7 @@ export default async function SettingsPage() {
           </Card>
         </Link>
         <Link href="/settings/fints">
-          <Card className="transition-colors hover:border-primary">
+          <Card className="transition-colors hover:border-[var(--accent)]">
             <CardHeader>
               <CardTitle className="text-base">DKB via FinTS</CardTitle>
             </CardHeader>
@@ -31,7 +31,7 @@ export default async function SettingsPage() {
           </Card>
         </Link>
         <Link href="/settings/import">
-          <Card className="transition-colors hover:border-primary">
+          <Card className="transition-colors hover:border-[var(--accent)]">
             <CardHeader>
               <CardTitle className="text-base">CSV-Import</CardTitle>
             </CardHeader>
@@ -41,7 +41,7 @@ export default async function SettingsPage() {
           </Card>
         </Link>
         <Link href="/settings/review">
-          <Card className="transition-colors hover:border-primary">
+          <Card className="transition-colors hover:border-[var(--accent)]">
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Review-Queue</CardTitle>
               {review.count > 0 && <Badge variant="destructive">{review.count}</Badge>}

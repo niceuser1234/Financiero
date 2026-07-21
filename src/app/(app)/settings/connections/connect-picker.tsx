@@ -30,7 +30,7 @@ export function ConnectPicker({
             </Button>
           </form>
         ))}
-        {filtered.length === 0 && <p className="text-sm text-muted-foreground">Keine Treffer.</p>}
+        {filtered.length === 0 && <p className="text-sm text-ink-500">Keine Treffer.</p>}
       </div>
     </div>
   );

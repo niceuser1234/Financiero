@@ -64,7 +64,7 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
   }
 
   if (phase === "done")
-    return <p className="text-sm text-green-600">DKB ist verbunden.</p>;
+    return <p className="text-sm text-income">DKB ist verbunden.</p>;
 
   if (phase === "waiting")
     return (

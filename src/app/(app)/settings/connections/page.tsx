@@ -1,10 +1,12 @@
+import { Landmark } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/ds/empty-state";
+import { Money } from "@/components/ds/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SyncButton } from "@/components/sync-button";
 import { listAspsps, listConnections, reconnect, startBankConnect } from "@/lib/banking/actions";
-import { formatCents } from "@/lib/money";
 import { ConnectPicker } from "./connect-picker";
 
 function consentBadge(validUntil: Date | null, status: string) {
@@ -12,7 +14,7 @@ function consentBadge(validUntil: Date | null, status: string) {
   if (!validUntil) return <Badge variant="secondary">Kein Ablaufdatum</Badge>;
   const days = Math.ceil((validUntil.getTime() - Date.now()) / (24 * 3600 * 1000));
   if (days <= 0) return <Badge variant="destructive">Abgelaufen</Badge>;
-  if (days <= 7) return <Badge variant="destructive">Läuft in {days} Tagen ab</Badge>;
+  if (days <= 7) return <Badge variant="review">Läuft in {days} Tagen ab</Badge>;
   return <Badge variant="secondary">Gültig bis {validUntil.toLocaleDateString("de-DE")}</Badge>;
 }
 
@@ -33,19 +35,24 @@ export default async function ConnectionsPage({
       />
 
       {sp.connected && (
-        <p className="mb-4 rounded-md bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">
+        <p className="mb-4 rounded-md bg-income-soft px-4 py-2 text-sm text-income">
           Verbindung hergestellt. Starte einen Sync, um Umsätze zu laden.
         </p>
       )}
       {sp.error && (
-        <p className="mb-4 rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <p className="mb-4 rounded-md bg-expense-soft px-4 py-2 text-sm text-expense-strong">
           Fehler beim Verbinden: {decodeURIComponent(sp.error)}
         </p>
       )}
 
       <div className="mb-8 space-y-3">
         {conns.length === 0 && (
-          <p className="text-sm text-muted-foreground">Noch keine Verbindung. Wähle unten deine Bank.</p>
+          <EmptyState
+            compact
+            icon={Landmark}
+            title="Noch keine Verbindung"
+            message="Wähle unten deine Bank, um Konten zu verbinden."
+          />
         )}
         {conns.map((c) => (
           <Card key={c.id}>
@@ -57,11 +64,14 @@ export default async function ConnectionsPage({
               {c.accounts.map((a) => (
                 <div key={a.id} className="flex items-center justify-between text-sm">
                   <span>
-                    {a.name} {a.ibanMasked && <span className="text-muted-foreground">· {a.ibanMasked}</span>}
+                    {a.name}{" "}
+                    {a.ibanMasked && <span className="text-ink-500">· {a.ibanMasked}</span>}
                   </span>
-                  <span className="tabular-nums">
-                    {a.balanceCents != null ? formatCents(a.balanceCents, a.currency) : "–"}
-                  </span>
+                  {a.balanceCents != null ? (
+                    <Money cents={a.balanceCents} currency={a.currency} className="text-sm" />
+                  ) : (
+                    <span className="text-ink-400">–</span>
+                  )}
                 </div>
               ))}
               {c.provider === "enable_banking" && (
@@ -82,9 +92,11 @@ export default async function ConnectionsPage({
         </CardHeader>
         <CardContent>
           {aspsps.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Keine Banken geladen. Prüfe die Enable-Banking-Zugangsdaten (Env-Variablen).
-            </p>
+            <EmptyState
+              compact
+              title="Keine Banken geladen"
+              message="Prüfe die Enable-Banking-Zugangsdaten (Env-Variablen)."
+            />
           ) : (
             <ConnectPicker aspsps={aspsps} action={startBankConnect} />
           )}
