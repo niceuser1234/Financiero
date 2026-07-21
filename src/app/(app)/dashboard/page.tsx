@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
-import { Calendar, Landmark, PiggyBank, Repeat, Wallet } from "lucide-react";
+import { Calendar, Landmark, PiggyBank, Repeat } from "lucide-react";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
+import { BalanceKpi } from "@/components/dashboard/balance-kpi";
 import { KpiCard } from "@/components/ds/kpi-card";
 import { EmptyState } from "@/components/ds/empty-state";
 import { Money } from "@/components/ds/money";
@@ -72,12 +73,38 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard label="Gesamtsaldo" value={dto.totalBalanceFmt} tone="accent" icon={Wallet} />
-        <KpiCard label="Einnahmen / Monat" value={dto.incomeFmt} tone="income" />
-        <KpiCard label="Ausgaben / Monat" value={dto.expensesFmt} tone="expense" />
-        <KpiCard label="Sparen / Monat" value={dto.savingFmt} tone="neutral" icon={PiggyBank} />
-        <KpiCard label="Abos / Monat" value={dto.subsFmt} tone="neutral" icon={Repeat} />
+      <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2 lg:grid-cols-6">
+        <BalanceKpi
+          total={dto.totalBalanceFmt}
+          real={dto.realAvailableFmt}
+          remainingFixed={dto.remainingFixedFmt}
+        />
+        <KpiCard
+          label="Einnahmen"
+          value={dto.incomeFmt}
+          tone="income"
+          sublabel={dto.periodProgressLabel}
+        />
+        <KpiCard
+          label="Ausgaben"
+          value={dto.expensesFmt}
+          tone="expense"
+          sublabel={dto.periodProgressLabel}
+        />
+        <KpiCard
+          label="Sparen"
+          value={dto.savingFmt}
+          tone="neutral"
+          icon={PiggyBank}
+          sublabel={dto.periodLabel}
+        />
+        <KpiCard
+          label="Fixkosten"
+          value={dto.subsFmt}
+          tone="neutral"
+          icon={Repeat}
+          sublabel="Ø wiederkehrend / Monat"
+        />
       </div>
 
       <div className="mb-[18px] grid gap-[18px] lg:grid-cols-[1.3fr_1fr]">
