@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandKeyOf, fingerprintOf, matchBrand, normalizePurpose, unwrapPaypal } from "./normalize";
+import { brandKeyOf, fingerprintOf, isNonRecurringBrand, matchBrand, normalizePurpose, unwrapPaypal } from "./normalize";
 
 describe("normalizePurpose", () => {
   it("strips sepa boilerplate", () => {
@@ -61,5 +61,17 @@ describe("matchBrand / brandKeyOf", () => {
     expect(matchBrand("claude ai subscription")?.name).toBe("Claude AI");
     expect(brandKeyOf("claude ai subscription")).toBe("anthropic claude");
     expect(brandKeyOf("anthropic claude sub")).toBe("anthropic claude");
+  });
+});
+
+describe("isNonRecurringBrand", () => {
+  it("flags retail/food/marketplace merchants", () => {
+    for (const s of ["REWE Markt", "ALDI SUED", "Konsum Leipzig", "Deutsche Bahn", "dm-drogerie", "MC DOENER"]) {
+      expect(isNonRecurringBrand(s)).toBe(true);
+    }
+  });
+  it("does not flag real subscriptions", () => {
+    expect(isNonRecurringBrand("Spotify AB")).toBe(false);
+    expect(isNonRecurringBrand("Netflix")).toBe(false);
   });
 });

@@ -6,6 +6,14 @@ const BOILERPLATE = [
   /\bDE\d{2}[A-Z0-9]{2,}\b/g, // Gläubiger-IDs / IBANs im Fließtext
 ];
 
+/** Retail/marketplace/cashflow noise — never a subscription/contract. */
+export const NON_RECURRING_BRAND =
+  /\b(rewe|aldi|lidl|edeka|rossmann|\bdm\b|konsum|amazon|vinted|kleiderkreisel|paypal|deutsche bahn|db vertrieb|getkong|playtomic|nextbike|studentenwerk|mc doener|doener|einzahlung|kartenpreis|dkb)\b/i;
+
+export function isNonRecurringBrand(text: string): boolean {
+  return NON_RECURRING_BRAND.test(text ?? "");
+}
+
 /**
  * Bekannte Marken → kanonischer Fingerprint + Display-Name.
  * Wichtig: Anthropic/Claude und Spotifys diverse Kartentexte landen in EINEM Händler.
@@ -46,7 +54,8 @@ export function matchBrand(
   const hay = parts.filter(Boolean).join(" ");
   if (!hay) return null;
   for (const b of BRAND_ALIASES) {
-    if (b.test.test(hay)) return b;
+    // Blocklistete Marken (Retail/Marketplace/Cashflow) sind nie ein Abo-Hinweis.
+    if (b.test.test(hay)) return { ...b, subscription: b.subscription && !isNonRecurringBrand(b.name) };
   }
   return null;
 }
