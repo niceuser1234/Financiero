@@ -5,6 +5,7 @@ import { connections } from "@/db/schema";
 import { requireSession } from "@/lib/session";
 import { formatCents } from "@/lib/money";
 import { getDashboardData } from "./queries";
+import { monthLabelDE } from "./period";
 import type { DonutSlice } from "@/components/charts/category-donut";
 import type { TrendBar } from "@/components/charts/trend-bars";
 
@@ -14,6 +15,10 @@ export interface AnalyticsDTO {
   expensesFmt: string;
   subsFmt: string;
   savingFmt: string;
+  realAvailableFmt: string;
+  remainingFixedFmt: string;
+  periodLabel: string;
+  periodProgressLabel: string;
   donut: DonutSlice[];
   trend: TrendBar[];
   topMerchants: { name: string; fmt: string; count: number }[];
@@ -30,6 +35,7 @@ function monthLabel(ym: string): string {
 export async function getAnalyticsDTO(range?: { from: string; to: string }): Promise<AnalyticsDTO> {
   await requireSession();
   const d = await getDashboardData(new Date(), range);
+  const periodLabel = monthLabelDE(new Date());
 
   return {
     totalBalanceFmt: formatCents(d.totalBalanceCents),
@@ -37,6 +43,10 @@ export async function getAnalyticsDTO(range?: { from: string; to: string }): Pro
     expensesFmt: formatCents(d.expensesMonthCents),
     subsFmt: formatCents(d.subsMonthlyCents),
     savingFmt: formatCents(d.savingMonthCents),
+    realAvailableFmt: formatCents(d.realAvailableCents),
+    remainingFixedFmt: formatCents(d.remainingFixedCents),
+    periodLabel,
+    periodProgressLabel: `${periodLabel} · bisher`,
     donut: d.byCategory.map<DonutSlice>((c) => ({
       name: c.name,
       color: c.color,
