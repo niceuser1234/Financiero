@@ -14,7 +14,7 @@ export interface FingerprintGroup {
   txs: RecurringTx[];
 }
 
-export type Cadence = "weekly" | "monthly" | "quarterly" | "yearly";
+export type Cadence = "weekly" | "bimonthly" | "monthly" | "quarterly" | "yearly";
 
 export interface RecurringResult {
   merchantId: string;
@@ -78,7 +78,7 @@ function bucketCadence(medianInterval: number): Bucket | null {
   if (medianInterval >= 5 && medianInterval <= 9) return { cadence: "weekly", cycleMonths: 0, cycleDays: 7 };
   if (medianInterval >= 12 && medianInterval <= 16) return { cadence: "weekly", cycleMonths: 0, cycleDays: 14 };
   if (medianInterval >= 25 && medianInterval <= 40) return { cadence: "monthly", cycleMonths: 1 };
-  if (medianInterval >= 55 && medianInterval <= 75) return { cadence: "monthly", cycleMonths: 2 };
+  if (medianInterval >= 55 && medianInterval <= 75) return { cadence: "bimonthly", cycleMonths: 2 };
   if (medianInterval >= 80 && medianInterval <= 110) return { cadence: "quarterly", cycleMonths: 3 };
   if (medianInterval >= 340 && medianInterval <= 390) return { cadence: "yearly", cycleMonths: 12 };
   return null;
@@ -122,6 +122,7 @@ function monthlyEquiv(medianAmount: bigint, bucket: Bucket): bigint {
   let factor: number;
   if (bucket.cycleDays === 7) factor = 13 / 3;
   else if (bucket.cycleDays === 14) factor = 26 / 12;
+  else if (bucket.cadence === "bimonthly") factor = 1 / 2;
   else if (bucket.cadence === "monthly") factor = 1 / (bucket.cycleMonths || 1);
   else if (bucket.cadence === "quarterly") factor = 1 / 3;
   else factor = 1 / 12;
@@ -210,7 +211,7 @@ function detectOneCluster(
   if (!bucket) return null;
 
   // Bi-monthly rhythm only with subscription hint
-  if (bucket.cycleMonths === 2 && !isSubscriptionHint) return null;
+  if (bucket.cadence === "bimonthly" && !isSubscriptionHint) return null;
   // Weekly without hint is almost always noise
   if (bucket.cycleDays && !isSubscriptionHint) return null;
 

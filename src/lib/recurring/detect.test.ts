@@ -90,7 +90,8 @@ describe("detectRecurring", () => {
     const res = detectRecurring([g], "2026-07-21");
     expect(res.length).toBeGreaterThanOrEqual(1);
     const main = res[0];
-    expect(main.cadence).toBe("monthly"); // bimonthly stored as monthly
+    expect(main.cadence).toBe("bimonthly");
+    expect(main.amountLastCents).toBe(-699n);
     expect(main.amountMedianCents).toBe(-699n);
     // monthly equiv ~ half
     expect(main.monthlyEquivCents).toBe(-349n);
