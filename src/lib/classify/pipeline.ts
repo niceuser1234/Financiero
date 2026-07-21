@@ -18,8 +18,9 @@ export async function runPipeline(insertedTxIds: string[]): Promise<void> {
   await applyRules();
   try {
     await classifyUnknownFingerprints();
-  } catch {
-    // Kein API-Key / API-Fehler soll den Sync nicht abbrechen.
+  } catch (e) {
+    // Klassifizierung darf den Import nicht abbrechen — aber Fehler sichtbar loggen.
+    console.error("Klassifizierung fehlgeschlagen:", (e as Error).message);
   }
   await runRecurringDetection();
 }
