@@ -1,11 +1,11 @@
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, connections, syncRuns, transactions } from "@/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { importHash } from "@/lib/import/hash";
 import { enableBankingFromEnv } from "./enable-banking";
 import { FintsProvider } from "./fints";
-import { NeedTanError, type BankProvider, type ProviderTransaction, type ReadProvider } from "./types";
+import { NeedTanError, type ProviderTransaction, type ReadProvider } from "./types";
 
 export interface SyncStats {
   newTx: number;

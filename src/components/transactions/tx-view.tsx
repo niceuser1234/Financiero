@@ -313,19 +313,38 @@ function DetailSheet({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [catId, setCatId] = useState<string | null>(null);
+  return (
+    <Sheet open={!!tx} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="overflow-y-auto">
+        {tx && (
+          <DetailSheetBody
+            key={tx.id}
+            tx={tx}
+            categories={categories}
+            onSaved={onSaved}
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function DetailSheetBody({
+  tx,
+  categories,
+  onSaved,
+}: {
+  tx: TxDTO;
+  categories: PickerCategory[];
+  onSaved: () => void;
+}) {
+  const [catId, setCatId] = useState<string | null>(tx.categoryId);
   const [createRule, setCreateRule] = useState(true);
   const [applyPast, setApplyPast] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setCatId(tx?.categoryId ?? null);
-    setCreateRule(true);
-    setApplyPast(false);
-  }, [tx]);
-
   async function save() {
-    if (!tx || !catId) return;
+    if (!catId) return;
     setSaving(true);
     try {
       const res = await recategorize({ txId: tx.id, categoryId: catId, createRule, applyPast });
@@ -339,60 +358,54 @@ function DetailSheet({
   }
 
   return (
-    <Sheet open={!!tx} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="overflow-y-auto">
-        {tx && (
-          <>
-            <SheetHeader>
-              <SheetTitle>{tx.merchantName ?? tx.counterpartyName ?? "Buchung"}</SheetTitle>
-            </SheetHeader>
-            <div className="space-y-4 px-4 pb-8">
-              <Money.Text
-                value={tx.amountFmt}
-                tone={tx.negative ? "neutral" : "income"}
-                className="text-2xl"
-              />
-              <dl className="space-y-1.5 text-sm">
-                <Row label="Datum" value={formatDate(tx.bookingDate)} />
-                <Row label="Gegenpartei" value={tx.counterpartyName ?? "–"} />
-                <Row label="Verwendungszweck" value={tx.purpose ?? "–"} />
-                <Row label="Kategorie" value={tx.categoryName ?? "Nicht kategorisiert"} />
-                <Row
-                  label="Quelle"
-                  value={
-                    <span className="flex items-center gap-1.5">
-                      {sourceLabel(tx.categorizationSource)}
-                      {tx.confidence != null && (
-                        <Badge variant="secondary">{Math.round(tx.confidence * 100)}%</Badge>
-                      )}
-                    </span>
-                  }
-                />
-                {tx.isTransfer && <Row label="Typ" value={<Badge variant="secondary">Umbuchung</Badge>} />}
-              </dl>
+    <>
+      <SheetHeader>
+        <SheetTitle>{tx.merchantName ?? tx.counterpartyName ?? "Buchung"}</SheetTitle>
+      </SheetHeader>
+      <div className="space-y-4 px-4 pb-8">
+        <Money.Text
+          value={tx.amountFmt}
+          tone={tx.negative ? "neutral" : "income"}
+          className="text-2xl"
+        />
+        <dl className="space-y-1.5 text-sm">
+          <Row label="Datum" value={formatDate(tx.bookingDate)} />
+          <Row label="Gegenpartei" value={tx.counterpartyName ?? "–"} />
+          <Row label="Verwendungszweck" value={tx.purpose ?? "–"} />
+          <Row label="Kategorie" value={tx.categoryName ?? "Nicht kategorisiert"} />
+          <Row
+            label="Quelle"
+            value={
+              <span className="flex items-center gap-1.5">
+                {sourceLabel(tx.categorizationSource)}
+                {tx.confidence != null && (
+                  <Badge variant="secondary">{Math.round(tx.confidence * 100)}%</Badge>
+                )}
+              </span>
+            }
+          />
+          {tx.isTransfer && <Row label="Typ" value={<Badge variant="secondary">Umbuchung</Badge>} />}
+        </dl>
 
-              <div className="space-y-2 border-t border-hairline pt-4">
-                <Label>Kategorie ändern</Label>
-                <div className="flex flex-col gap-2">
-                  <CategoryPicker categories={categories} value={catId} onChange={setCatId} />
-                  <label className="flex items-center gap-2 text-sm text-ink-700">
-                    <input type="checkbox" checked={createRule} onChange={(e) => setCreateRule(e.target.checked)} />
-                    Regel für diesen Händler anlegen
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-ink-700">
-                    <input type="checkbox" checked={applyPast} onChange={(e) => setApplyPast(e.target.checked)} />
-                    Auf vergangene Buchungen anwenden
-                  </label>
-                </div>
-                <Button onClick={save} disabled={saving || !catId} className="mt-2 w-full">
-                  {saving ? "Speichert…" : "Speichern"}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+        <div className="space-y-2 border-t border-hairline pt-4">
+          <Label>Kategorie ändern</Label>
+          <div className="flex flex-col gap-2">
+            <CategoryPicker categories={categories} value={catId} onChange={setCatId} />
+            <label className="flex items-center gap-2 text-sm text-ink-700">
+              <input type="checkbox" checked={createRule} onChange={(e) => setCreateRule(e.target.checked)} />
+              Regel für diesen Händler anlegen
+            </label>
+            <label className="flex items-center gap-2 text-sm text-ink-700">
+              <input type="checkbox" checked={applyPast} onChange={(e) => setApplyPast(e.target.checked)} />
+              Auf vergangene Buchungen anwenden
+            </label>
+          </div>
+          <Button onClick={save} disabled={saving || !catId} className="mt-2 w-full">
+            {saving ? "Speichert…" : "Speichern"}
+          </Button>
+        </div>
+      </div>
+    </>
   );
 }
 

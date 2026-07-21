@@ -23,13 +23,18 @@ import { getAnalyticsDTO, getConsentWarnings } from "@/lib/analytics/actions";
 import { fetchTransactions } from "@/lib/transactions/actions";
 
 export default async function DashboardPage() {
+  // Server page: default window is "last 90 days" relative to request time.
+  const from90 = new Date();
+  from90.setUTCDate(from90.getUTCDate() - 90);
+  const from = from90.toISOString().slice(0, 10);
+
   const [dto, warnings, accounts, review, recent] = await Promise.all([
     getAnalyticsDTO(),
     getConsentWarnings(),
     db.select().from(bankAccounts).orderBy(asc(bankAccounts.name)),
     fetchTransactions({ needsReview: true, limit: 1 }),
     fetchTransactions({
-      from: new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      from,
       includeTransfers: false,
       limit: 5,
     }),
