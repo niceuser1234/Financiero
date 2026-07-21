@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { merchants, recurringItems, transactions } from "@/db/schema";
+import { categories, merchants, recurringItems, transactions } from "@/db/schema";
 import { brandKeyOf, fingerprintOf, matchBrand } from "@/lib/classify/normalize";
 import { detectRecurring, type FingerprintGroup } from "./detect";
 
@@ -49,7 +49,7 @@ export async function linkKnownMerchants(): Promise<{ linked: number }> {
   return { linked };
 }
 
-type GroupEx = FingerprintGroup & { fingerprint: string; name: string };
+type GroupEx = FingerprintGroup & { fingerprint: string; name: string; kindTally: Map<string, number> };
 
 /**
  * Konsolidiert Händler-Gruppen nach Brand-Key (z.B. claude.ai + anthropic claude sub).
@@ -71,11 +71,19 @@ function mergeBrandGroups(groups: GroupEx[]): FingerprintGroup[] {
     });
     const primary = sorted[0];
     const brand = matchBrand(primary.fingerprint, primary.name);
+
+    const tally = new Map<string, number>();
+    for (const p of parts) for (const [k, n] of p.kindTally) tally.set(k, (tally.get(k) ?? 0) + n);
+    let categoryKind: FingerprintGroup["categoryKind"] | undefined;
+    let best = 0;
+    for (const [k, n] of tally) if (n > best) { best = n; categoryKind = k as FingerprintGroup["categoryKind"]; }
+
     out.push({
       merchantId: primary.merchantId,
       isSubscriptionHint: parts.some((p) => p.isSubscriptionHint) || !!brand?.subscription,
       label: brand?.name ?? primary.name,
       txs: parts.flatMap((p) => p.txs),
+      categoryKind,
     });
   }
   return out;
@@ -162,9 +170,11 @@ export async function runRecurringDetection(
       fingerprint: merchants.fingerprint,
       nameClean: merchants.nameClean,
       purpose: transactions.purpose,
+      categoryKind: categories.kind,
     })
     .from(transactions)
     .innerJoin(merchants, eq(transactions.merchantId, merchants.id))
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(and(isNotNull(transactions.merchantId), eq(transactions.isTransfer, false)));
 
   const byMerchant = new Map<string, GroupEx>();
@@ -178,10 +188,12 @@ export async function runRecurringDetection(
         name: r.nameClean,
         label: r.nameClean,
         txs: [],
+        kindTally: new Map(),
       };
       byMerchant.set(r.merchantId!, g);
     }
     if (r.purpose && /miete/i.test(r.purpose)) g.label = `${g.name} miete`;
+    if (r.categoryKind) g.kindTally.set(r.categoryKind, (g.kindTally.get(r.categoryKind) ?? 0) + 1);
     g.txs.push({
       id: r.id,
       bookingDate: r.bookingDate,
