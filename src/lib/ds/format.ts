@@ -3,7 +3,7 @@
  * Bewusst frei von React, damit sie im node-Environment testbar bleiben.
  */
 
-/** Initiale für den Merchant-Avatar. Das DS holt keine Logos — nur den ersten Buchstaben. */
+/** Initiale für den Merchant-Avatar (Fallback, wenn kein Logo auflösbar ist). */
 export function initialFor(name: string | null | undefined): string {
   const first = (name ?? "").trim().charAt(0);
   return first === "" ? "?" : first.toUpperCase();

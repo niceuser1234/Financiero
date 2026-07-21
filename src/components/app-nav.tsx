@@ -9,6 +9,7 @@ import {
   ChartPie,
   Settings,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const NAV = [
   { href: "/transactions", label: "Transaktionen", icon: ArrowLeftRight },
   { href: "/contracts", label: "Verträge", icon: Repeat },
   { href: "/analysis", label: "Analyse", icon: ChartPie },
+  { href: "/assistant", label: "Assistent", icon: Sparkles },
   { href: "/settings", label: "Einstellungen", icon: Settings },
 ];
 

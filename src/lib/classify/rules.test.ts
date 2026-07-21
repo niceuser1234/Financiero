@@ -54,7 +54,7 @@ describe("applyRulesTo", () => {
   });
 
   it("falls back to merchant map after rules", () => {
-    const map = new Map([["rewe markt gmbh fil", merchant("rewe markt gmbh fil", "cat-food")]]);
+    const map = new Map([["rewe", merchant("rewe", "cat-food")]]);
     const m = applyRulesTo({ counterpartyName: "REWE Markt GmbH Fil. 0421", purpose: null }, [], map);
     expect(m?.categoryId).toBe("cat-food");
     expect(m?.matchedBy).toBe("merchant");

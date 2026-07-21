@@ -169,6 +169,10 @@
   --secondary-foreground: var(--ink-900);
   --muted: var(--surface-sunken);
   --muted-foreground: var(--ink-500);
+  /* Achtung, Namenskollision: shadcn nutzt --accent als dezente Hoverfläche,
+     das DS als Marine-Aktionsfarbe. Das DS-Vokabular gewinnt, deshalb wird
+     --accent hier NICHT umgebogen. Die shadcn-Konsumenten von bg-accent
+     (select, dropdown-menu) werden in Task 8 auf surface-hover umgestellt. */
   --accent-foreground: var(--accent-fg);
   --destructive: var(--expense);
   --border: var(--hairline);
@@ -804,25 +808,47 @@ Expected: Treffer in `select.tsx`, `dropdown-menu.tsx` und ggf. weiteren.
 
 Regel: Das `dark:`-Fragment ersatzlos streichen. Der Light-Wert daneben bleibt stehen — er ist über die Bridge bereits DS-konform. Beispiel: `bg-input/30 dark:bg-input/50` → `bg-input/30`.
 
-- [ ] **Step 3: Popover-Flächen auf DS-Elevation**
+- [ ] **Step 3: `bg-accent` in Menüs auf Hoverfläche umstellen** ⚠️
+
+Kritisch. `--accent` ist im DS Marine, in shadcn eine dezente Hoverfläche. Ohne diesen Schritt wird jeder Menüeintrag beim Fokussieren ein vollflächiger Marine-Block.
+
+Run: `grep -rn "bg-accent\|text-accent-foreground" src/components/ui/`
+Expected: Treffer in `select.tsx` (1) und `dropdown-menu.tsx` (5).
+
+In **jedem** Treffer ersetzen:
+- `focus:bg-accent` → `focus:bg-surface-hover`
+- `focus:text-accent-foreground` → `focus:text-ink-900`
+- `data-popup-open:bg-accent` → `data-popup-open:bg-surface-hover`
+- `data-popup-open:text-accent-foreground` → `data-popup-open:text-ink-900`
+- `data-open:bg-accent` → `data-open:bg-surface-hover`
+- `data-open:text-accent-foreground` → `data-open:text-ink-900`
+- `focus:**:text-accent-foreground` → `focus:**:text-ink-900`
+- `group-focus/dropdown-menu-item:text-accent-foreground` → `group-focus/dropdown-menu-item:text-ink-900`
+
+Danach prüfen: `grep -rn "accent-foreground\|bg-accent" src/components/ui/`
+Expected: **keine Ausgabe.**
+
+`bg-accent-soft` ist davon nicht betroffen — das ist ein eigener DS-Token und bleibt.
+
+- [ ] **Step 4: Popover-Flächen auf DS-Elevation**
 
 In `select.tsx`, `dropdown-menu.tsx`, `dialog.tsx`, `sheet.tsx` bei den Popup-/Content-Containern:
 - `rounded-lg`/`rounded-md` → `rounded-md`
 - vorhandene `shadow-md`/`shadow-lg` → `shadow-ds-lg`
 - `border` ergänzen bzw. auf `border-hairline` setzen
 
-- [ ] **Step 4: Table auf DS-Zeilenmaße**
+- [ ] **Step 5: Table auf DS-Zeilenmaße**
 
 In `table.tsx` bei der Zellen-/Zeilendefinition:
 - Vertikales Padding auf `py-[14px]` (= `--row-pad-y`)
 - Zeilentrenner auf `border-hairline`
 - Hover-Zeile auf `hover:bg-surface-hover`
 
-- [ ] **Step 5: Skeleton auf DS-Fläche**
+- [ ] **Step 6: Skeleton auf DS-Fläche**
 
 `bg-muted`/`bg-accent` → `bg-surface-sunken`, `rounded-md` beibehalten.
 
-- [ ] **Step 6: Prüfen**
+- [ ] **Step 7: Prüfen**
 
 Run: `grep -rn "dark:" src/components/ui/`
 Expected: **keine Ausgabe.**
@@ -830,7 +856,7 @@ Expected: **keine Ausgabe.**
 Run: `npm run build`
 Expected: erfolgreich.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/components/ui/

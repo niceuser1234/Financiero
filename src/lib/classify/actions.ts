@@ -4,7 +4,9 @@ import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
 import { requireSession } from "@/lib/session";
+import { runRecurringDetection } from "@/lib/recurring/apply";
 import { classifyUnknownFingerprints } from "./llm";
+import { applyRules } from "./rules";
 
 /** Anzahl nicht kategorisierter Ausgaben (kein Transfer, keine Kategorie). */
 export async function getUnclassifiedCount(): Promise<number> {
@@ -16,8 +18,11 @@ export async function getUnclassifiedCount(): Promise<number> {
   return row?.n ?? 0;
 }
 
-/** Erneuter Klassifizierungslauf (Retry-Button). */
-export async function retryClassification(): Promise<{ classified: number }> {
+/** Erneuter Klassifizierungs- + Vertragserkennungs-Lauf (Retry-Button). */
+export async function retryClassification(): Promise<{ classified: number; recurring: number }> {
   await requireSession();
-  return classifyUnknownFingerprints();
+  await applyRules();
+  const { classified } = await classifyUnknownFingerprints();
+  const { items } = await runRecurringDetection();
+  return { classified, recurring: items };
 }

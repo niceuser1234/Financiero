@@ -56,6 +56,12 @@ npm run build            # Production-Build
 - **Historischer Backfill:** CSV-Export der Bank importieren; Dubletten werden per `import_hash`
   automatisch übersprungen.
 
+## Assistent
+
+Unter **Assistent** kannst du in natürlicher Sprache Fragen zu deinen Konten stellen
+(Ausgaben nach Kategorie, Abos,  geschätzter Spielraum für die nächsten Tage).
+Nutzt `OPENROUTER_API_KEY` und optional `CHAT_MODEL` (Default: derselbe wie `CLASSIFY_MODEL`).
+
 ## Klassifizierung
 
 Deterministische Regeln zuerst (0 Kosten), dann Claude-Batch für unbekannte Händler

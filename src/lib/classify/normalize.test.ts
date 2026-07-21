@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fingerprintOf, normalizePurpose, unwrapPaypal } from "./normalize";
+import { brandKeyOf, fingerprintOf, matchBrand, normalizePurpose, unwrapPaypal } from "./normalize";
 
 describe("normalizePurpose", () => {
   it("strips sepa boilerplate", () => {
@@ -28,7 +28,8 @@ describe("unwrapPaypal", () => {
 
 describe("fingerprintOf", () => {
   it("builds stable fingerprints from counterparty", () => {
-    expect(fingerprintOf("REWE Markt GmbH Fil. 0421", null)).toBe("rewe markt gmbh fil");
+    // REWE mapped to brand alias
+    expect(fingerprintOf("REWE Markt GmbH Fil. 0421", null)).toBe("rewe");
   });
   it("is stable across varying order numbers", () => {
     expect(fingerprintOf(null, "AMAZON.DE 302-99 RETOURE")).toBe(
@@ -39,5 +40,26 @@ describe("fingerprintOf", () => {
     expect(fingerprintOf("PayPal Europe S.a.r.l.", "PP.1.PP . NETFLIX, Ihr Einkauf bei NETFLIX")).toBe(
       "netflix",
     );
+  });
+  it("unifies anthropic/claude variants", () => {
+    expect(fingerprintOf("CLAUDE.AI SUBSCRIPTION", "CLAUDE.AI SUBSCRIPTION")).toBe("anthropic claude");
+    expect(fingerprintOf("ANTHROPIC* CLAUDE SUB", "ANTHROPIC* CLAUDE SUB")).toBe("anthropic claude");
+    expect(fingerprintOf("ANTHROPIC", "ANTHROPIC")).toBe("anthropic claude");
+  });
+  it("unifies spotify via paypal", () => {
+    expect(
+      fingerprintOf(
+        "PayPal Europe S.a.r.l. et Cie S.C.A",
+        "1051799357335/PP.5306.PP/. Spotify AB, Ihr Einkauf bei Spotify AB",
+      ),
+    ).toBe("spotify");
+  });
+});
+
+describe("matchBrand / brandKeyOf", () => {
+  it("maps display names", () => {
+    expect(matchBrand("claude ai subscription")?.name).toBe("Claude AI");
+    expect(brandKeyOf("claude ai subscription")).toBe("anthropic claude");
+    expect(brandKeyOf("anthropic claude sub")).toBe("anthropic claude");
   });
 });

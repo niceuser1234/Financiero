@@ -1,7 +1,7 @@
 import { eq, inArray, or, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { categoryRules, merchants, transactions, type CategoryRule, type Merchant } from "@/db/schema";
-import { fingerprintOf } from "./normalize";
+import { brandKeyOf, fingerprintOf } from "./normalize";
 
 export interface RuleInput {
   counterpartyName: string | null;
@@ -9,7 +9,7 @@ export interface RuleInput {
 }
 
 export interface RuleMatch {
-  categoryId: string;
+  categoryId?: string;
   merchantId?: string;
   source: "rule";
   matchedBy: string;
@@ -37,6 +37,10 @@ function testRule(rule: CategoryRule, tx: RuleInput, fp: string): boolean {
   }
 }
 
+function lookupMerchant(fp: string, merchantMap: Map<string, Merchant>): Merchant | undefined {
+  return merchantMap.get(fp) ?? merchantMap.get(brandKeyOf(fp));
+}
+
 /**
  * Deterministische Kategorisierung: Regeln nach priority (aufsteigend = zuerst),
  * dann gelernte Merchant-Zuordnung. Gibt null zurück, wenn nichts greift.
@@ -48,20 +52,34 @@ export function applyRulesTo(
 ): RuleMatch | null {
   const fp = fingerprintOf(tx.counterpartyName, tx.purpose);
   const sorted = [...rules].sort((a, b) => a.priority - b.priority);
+  const merchant = fp ? lookupMerchant(fp, merchantMap) : undefined;
 
   for (const rule of sorted) {
     if (testRule(rule, tx, fp)) {
-      return { categoryId: rule.categoryId, source: "rule", matchedBy: `rule:${rule.field}` };
+      return {
+        categoryId: rule.categoryId,
+        merchantId: merchant?.id,
+        source: "rule",
+        matchedBy: `rule:${rule.field}`,
+      };
     }
   }
 
-  const merchant = fp ? merchantMap.get(fp) : undefined;
   if (merchant?.defaultCategoryId) {
     return {
       categoryId: merchant.defaultCategoryId,
       merchantId: merchant.id,
       source: "rule",
       matchedBy: "merchant",
+    };
+  }
+
+  // Händler bekannt, aber noch ohne Default-Kategorie — trotzdem verknüpfen.
+  if (merchant) {
+    return {
+      merchantId: merchant.id,
+      source: "rule",
+      matchedBy: "merchant-link",
     };
   }
   return null;
@@ -71,7 +89,12 @@ export function applyRulesTo(
 export async function applyRules(txIds?: string[]): Promise<{ categorized: number }> {
   const rules = await db.select().from(categoryRules);
   const merchantRows = await db.select().from(merchants);
-  const merchantMap = new Map(merchantRows.map((m) => [m.fingerprint, m]));
+  const merchantMap = new Map<string, Merchant>();
+  for (const m of merchantRows) {
+    merchantMap.set(m.fingerprint, m);
+    const bk = brandKeyOf(m.fingerprint);
+    if (!merchantMap.has(bk)) merchantMap.set(bk, m);
+  }
 
   const rows = await db
     .select({
@@ -90,15 +113,19 @@ export async function applyRules(txIds?: string[]): Promise<{ categorized: numbe
   for (const r of rows) {
     const match = applyRulesTo(r, rules, merchantMap);
     if (match) {
-      await db
-        .update(transactions)
-        .set({
-          categoryId: match.categoryId,
-          categorizationSource: "rule",
-          merchantId: match.merchantId ?? undefined,
-        })
-        .where(eq(transactions.id, r.id));
-      categorized += 1;
+      const patch: {
+        categoryId?: string;
+        categorizationSource?: "rule";
+        merchantId?: string;
+      } = {};
+      if (match.merchantId) patch.merchantId = match.merchantId;
+      if (match.categoryId) {
+        patch.categoryId = match.categoryId;
+        patch.categorizationSource = "rule";
+      }
+      if (Object.keys(patch).length === 0) continue;
+      await db.update(transactions).set(patch).where(eq(transactions.id, r.id));
+      if (match.categoryId) categorized += 1;
     }
   }
   return { categorized };

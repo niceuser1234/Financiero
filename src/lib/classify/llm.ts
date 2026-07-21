@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, categories, llmRuns, merchants, transactions } from "@/db/schema";
-import { fingerprintOf } from "./normalize";
+import { fingerprintOf, matchBrand } from "./normalize";
 import {
   buildSystemPrompt,
   buildUserContent,
@@ -152,17 +152,21 @@ export async function classifyUnknownFingerprints(
         const norm = normalizeClassification(item, validSlugs);
         const categoryId = slugToId.get(norm.categorySlug) ?? sonstigesId;
 
+        const brand = matchBrand(item.id, norm.merchantClean);
+        const fp = brand?.fingerprint ?? item.id;
+        const nameClean = brand?.name ?? norm.merchantClean;
+        const isSub = norm.isSubscription || !!brand?.subscription;
         const [m] = await db
           .insert(merchants)
           .values({
-            fingerprint: item.id,
-            nameClean: norm.merchantClean,
+            fingerprint: fp,
+            nameClean,
             defaultCategoryId: categoryId,
-            isSubscriptionHint: norm.isSubscription,
+            isSubscriptionHint: isSub,
           })
           .onConflictDoUpdate({
             target: merchants.fingerprint,
-            set: { nameClean: norm.merchantClean, defaultCategoryId: categoryId, isSubscriptionHint: norm.isSubscription },
+            set: { nameClean, defaultCategoryId: categoryId, isSubscriptionHint: isSub },
           })
           .returning();
 
