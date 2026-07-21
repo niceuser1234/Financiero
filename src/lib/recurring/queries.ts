@@ -5,6 +5,7 @@ import { formatCents } from "@/lib/money";
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly: "wöchentlich",
+  bimonthly: "alle 2 Monate",
   monthly: "monatlich",
   quarterly: "vierteljährlich",
   yearly: "jährlich",
@@ -20,6 +21,8 @@ export interface RecurringDTO {
   monthlyEquivFmt: string;
   monthlyEquivAbs: number;
   amountLastFmt: string;
+  perChargeFmt: string;
+  monthlyHint: string;
   nextExpectedDate: string | null;
   nextRelative: string | null;
   status: string;
@@ -37,15 +40,17 @@ export interface RecurringOverview {
 
 export interface ActiveByCadence {
   monthly: RecurringDTO[];
+  bimonthly: RecurringDTO[];
   quarterly: RecurringDTO[];
   yearly: RecurringDTO[];
 }
 
 /** Bucketet aktive Verträge nach Kadenz; weekly wird zu monthly gefaltet. */
 export function groupByCadence(items: RecurringDTO[]): ActiveByCadence {
-  const g: ActiveByCadence = { monthly: [], quarterly: [], yearly: [] };
+  const g: ActiveByCadence = { monthly: [], bimonthly: [], quarterly: [], yearly: [] };
   for (const r of items) {
-    if (r.cadence === "quarterly") g.quarterly.push(r);
+    if (r.cadence === "bimonthly") g.bimonthly.push(r);
+    else if (r.cadence === "quarterly") g.quarterly.push(r);
     else if (r.cadence === "yearly") g.yearly.push(r);
     else g.monthly.push(r); // monthly + weekly
   }
@@ -85,6 +90,8 @@ function toDTO(row: {
     monthlyEquivFmt: formatCents(row.monthlyEquivCents, row.currency),
     monthlyEquivAbs: Math.abs(Number(row.monthlyEquivCents)),
     amountLastFmt: formatCents(row.amountLastCents, row.currency),
+    perChargeFmt: formatCents(row.amountLastCents, row.currency),
+    monthlyHint: `≈ ${formatCents(row.monthlyEquivCents, row.currency)} / Monat`,
     nextExpectedDate: row.nextExpectedDate,
     nextRelative: relative(row.nextExpectedDate),
     status: row.status,
