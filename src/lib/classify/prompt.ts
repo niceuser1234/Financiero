@@ -50,7 +50,10 @@ Regeln:
 - Wähle die spezifischste passende Unterkategorie. Wenn unklar, nutze die passende Hauptkategorie.
 - Wenn du den Händler nicht sinnvoll zuordnen kannst, nutze "sonstiges" mit niedriger confidence (< 0.5).
 - "confidence" ist deine Sicherheit zwischen 0 und 1.
-- Gib "id" exakt so zurück, wie sie im Input steht.`;
+- Gib "id" exakt so zurück, wie sie im Input steht.
+- Sparpläne und Broker-Einzahlungen (z.B. "Trade Republic", "Scalable", Verwendungszweck "Sparplan"/"Einzahlung" an ein eigenes Depot) gehören zu "sparen-investieren-sparen".
+- Kartengebühren ("Kartenpreis", Entgelt) -> "gebuehren-zinsen". Bargeld ("Bargeldabhebung", "Cashback") -> "bargeld".
+- Krankenkasse (z.B. VIACTIV) -> "versicherungen-kranken". Fitness (EGYM Wellpass, Fitness First) -> "gesundheit-fitness-fitnessstudio". KI-/Software-Abos (Anthropic, Claude, Cursor, Perplexity) -> "abos-software-cloud". Spotify -> "abos-streaming". Deutsche Bahn (DB Vertrieb) -> "mobilitaet-oepnv-bahn".`;
 }
 
 /** Baut den User-Turn (JSON-Liste der zu klassifizierenden Repräsentanten). */
