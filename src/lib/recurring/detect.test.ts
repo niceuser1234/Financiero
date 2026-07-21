@@ -120,6 +120,19 @@ describe("detectRecurring", () => {
     );
     expect(res[0]?.kind).toBe("saving");
   });
+
+  it("suppresses blocklisted retail even with a subscription hint", () => {
+    const mk = (d: string): { id: string; bookingDate: string; amountCents: bigint; currency: string } =>
+      ({ id: d, bookingDate: d, amountCents: -833n, currency: "EUR" });
+    const res = detectRecurring(
+      [{
+        merchantId: "rewe", isSubscriptionHint: true, label: "REWE",
+        txs: [mk("2026-05-02"), mk("2026-06-02"), mk("2026-07-02")],
+      }],
+      "2026-07-21",
+    );
+    expect(res).toHaveLength(0);
+  });
 });
 
 describe("clusterByAmount", () => {
