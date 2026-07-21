@@ -20,6 +20,50 @@ import type { PaymentPoint, RecurringDTO, RecurringOverview } from "@/lib/recurr
 
 type Tab = "aktiv" | "einnahmen" | "beendet";
 
+const CADENCE_SECTIONS: { key: "monthly" | "quarterly" | "yearly"; label: string }[] = [
+  { key: "monthly", label: "Monatlich" },
+  { key: "quarterly", label: "Vierteljährlich" },
+  { key: "yearly", label: "Jährlich" },
+];
+
+function CardsGrid({ items, onSelect }: { items: RecurringDTO[]; onSelect: (item: RecurringDTO) => void }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {items.map((c) => (
+        <button key={c.id} type="button" onClick={() => onSelect(c)} className="text-left">
+          <Card size="sm" className="transition-colors hover:border-[var(--accent)]">
+            <CardContent className="flex items-center gap-3.5">
+              <MerchantAvatar name={c.merchantName} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-ink-900">{c.merchantName}</span>
+                  <Repeat className="size-3.5 shrink-0 text-ink-400" strokeWidth={2} />
+                  {c.priceChanged && (
+                    <Badge variant="destructive" className="gap-1">
+                      <TrendingUp className="size-3" />
+                      Preis
+                    </Badge>
+                  )}
+                  {c.status === "paused" && <Badge variant="review">ausgeblieben</Badge>}
+                </div>
+                <div className="mt-0.5 text-xs text-ink-400">
+                  {c.cadenceLabel}
+                  {c.nextRelative && c.status === "active" && ` · nächste ${c.nextRelative}`}
+                </div>
+              </div>
+              <Money.Text
+                value={c.monthlyEquivFmt}
+                tone={c.kind === "income" ? "income" : "neutral"}
+                className="min-w-[104px] text-right"
+              />
+            </CardContent>
+          </Card>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ContractsView({ overview }: { overview: RecurringOverview }) {
   const router = useRouter();
   const [status, setStatus] = useState<Tab>("aktiv");
@@ -33,12 +77,7 @@ export function ContractsView({ overview }: { overview: RecurringOverview }) {
     startTransition(async () => setPayments(await loadPayments(item.id)));
   }
 
-  const lists = {
-    aktiv: overview.subscriptions,
-    einnahmen: overview.income,
-    beendet: overview.ended,
-  };
-  const current = lists[status];
+  const flat = { einnahmen: overview.income, beendet: overview.ended };
 
   const incomeSumFmt = useMemo(() => {
     const cents = overview.income.reduce((s, r) => s + Math.round(r.monthlyEquivAbs), 0);
@@ -68,51 +107,31 @@ export function ContractsView({ overview }: { overview: RecurringOverview }) {
         onChange={setStatus}
       />
 
-      {current.length === 0 ? (
-        <EmptyState
-          icon={Repeat}
-          title={status === "aktiv" ? "Noch keine Verträge erkannt" : "Nichts hier"}
-          message={
-            status === "aktiv"
-              ? "Sobald wiederkehrende Buchungen auftauchen, findest du sie hier."
-              : "Keine Verträge in dieser Ansicht."
-          }
-        />
+      {status === "aktiv" ? (
+        overview.subscriptions.length === 0 ? (
+          <EmptyState
+            icon={Repeat}
+            title="Noch keine Verträge erkannt"
+            message="Sobald wiederkehrende Buchungen auftauchen, findest du sie hier."
+          />
+        ) : (
+          <div className="space-y-6">
+            {CADENCE_SECTIONS.map(({ key, label }) =>
+              overview.activeByCadence[key].length === 0 ? null : (
+                <section key={key} className="space-y-3">
+                  <h3 className="text-[11px] font-semibold tracking-[var(--tracking-label)] text-ink-400 uppercase">
+                    {label}
+                  </h3>
+                  <CardsGrid items={overview.activeByCadence[key]} onSelect={open} />
+                </section>
+              ),
+            )}
+          </div>
+        )
+      ) : flat[status].length === 0 ? (
+        <EmptyState icon={Repeat} title="Nichts hier" message="Keine Verträge in dieser Ansicht." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {current.map((c) => (
-            <button key={c.id} type="button" onClick={() => open(c)} className="text-left">
-              <Card size="sm" className="transition-colors hover:border-[var(--accent)]">
-                <CardContent className="flex items-center gap-3.5">
-                  <MerchantAvatar name={c.merchantName} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-ink-900">{c.merchantName}</span>
-                      <Repeat className="size-3.5 shrink-0 text-ink-400" strokeWidth={2} />
-                      {c.priceChanged && (
-                        <Badge variant="destructive" className="gap-1">
-                          <TrendingUp className="size-3" />
-                          Preis
-                        </Badge>
-                      )}
-                      {c.status === "paused" && <Badge variant="review">ausgeblieben</Badge>}
-                    </div>
-                    <div className="mt-0.5 text-xs text-ink-400">
-                      {c.cadenceLabel}
-                      {c.nextRelative && c.status === "active" && ` · nächste ${c.nextRelative}`}
-                    </div>
-                  </div>
-                  {status === "beendet" && <Badge variant="secondary">Beendet</Badge>}
-                  <Money.Text
-                    value={c.monthlyEquivFmt}
-                    tone={c.kind === "income" ? "income" : "neutral"}
-                    className="min-w-[104px] text-right"
-                  />
-                </CardContent>
-              </Card>
-            </button>
-          ))}
-        </div>
+        <CardsGrid items={flat[status]} onSelect={open} />
       )}
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
