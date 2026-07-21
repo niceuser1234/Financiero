@@ -74,17 +74,41 @@ export async function getDashboardData(
     .select({
       income: sql<string>`coalesce(sum(case when ${transactions.amountCents} > 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
       expense: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and not (${excludedKinds}) then ${transactions.amountCents} else 0 end), 0)`,
-      saving: sql<string>`coalesce(sum(case when ${transactions.amountCents} < 0 and coalesce(${categories.kind}, 'expense') = 'saving' then ${transactions.amountCents} else 0 end), 0)`,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(inRange);
 
-  // Monatliche Abo-Last (aktive, nicht Einkommen).
+  // Monatliche Abo-Last (aktive, nicht Einkommen, nicht Sparen).
   const [subs] = await db
     .select({ sum: sql<string>`coalesce(sum(${recurringItems.monthlyEquivCents}), 0)` })
     .from(recurringItems)
-    .where(and(eq(recurringItems.status, "active"), sql`${recurringItems.kind} <> 'income'`));
+    .where(and(eq(recurringItems.status, "active"), sql`${recurringItems.kind} not in ('income','saving')`));
+
+  // Geplantes Sparen: monatliche Sparraten (z.B. Trade-Republic-Sparplan).
+  const [savingPlan] = await db
+    .select({ sum: sql<string>`coalesce(sum(${recurringItems.monthlyEquivCents}), 0)` })
+    .from(recurringItems)
+    .where(and(eq(recurringItems.status, "active"), sql`${recurringItems.kind} = 'saving'`));
+
+  // Extra-Einzahlungen: Spar-Buchungen diesen Monat, die NICHT zu einem Spar-Item gehören
+  // (z.B. zusätzlicher Trade-Republic-Einwurf für Aktienkäufe außerhalb des Sparplans).
+  const savingItemIds = db
+    .select({ id: recurringItems.id })
+    .from(recurringItems)
+    .where(sql`${recurringItems.kind} = 'saving'`);
+  const [savingExtra] = await db
+    .select({ sum: sql<string>`coalesce(sum(${transactions.amountCents}), 0)` })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(
+      and(
+        inRange,
+        sql`coalesce(${categories.kind}, 'expense') = 'saving'`,
+        sql`(${transactions.recurringItemId} is null or ${transactions.recurringItemId} not in ${savingItemIds})`,
+      ),
+    );
+  const savingMonthCents = BigInt(savingPlan?.sum ?? "0") + BigInt(savingExtra?.sum ?? "0");
 
   // Fixkosten, die diesen Monat noch NICHT abgebucht wurden (heute < fällig ≤ Monatsende).
   const [remaining] = await db
@@ -207,7 +231,7 @@ export async function getDashboardData(
     trend,
     topMerchants,
     upcoming,
-    savingMonthCents: BigInt(flow?.saving ?? "0"),
+    savingMonthCents,
     remainingFixedCents,
     realAvailableCents: BigInt(bal?.sum ?? "0") + remainingFixedCents,
     periodFrom: from,
