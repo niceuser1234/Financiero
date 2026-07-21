@@ -11,7 +11,7 @@ export interface ParsedRow {
   raw: Record<string, string>;
 }
 
-export type ProfileId = "dkb" | "revolut" | "paypal";
+export type ProfileId = "dkb" | "dkb_visa" | "revolut" | "paypal";
 
 export interface CsvProfile {
   id: ProfileId;
@@ -60,6 +60,29 @@ export const PROFILES: Record<ProfileId, CsvProfile> = {
         counterpartyName: (isOut ? r["Zahlungsempfänger*in"] : r["Zahlungspflichtige*r"]) || null,
         counterpartyIban: r["IBAN"] || null,
         purpose: r["Verwendungszweck"] || null,
+        raw: r,
+      };
+    },
+  },
+
+  dkb_visa: {
+    id: "dkb_visa",
+    label: "DKB Visa Kreditkarte",
+    delimiter: ";",
+    sliceToHeader: (lines) => {
+      const idx = lines.findIndex((l) => l.replace(/"/g, "").startsWith("Belegdatum"));
+      return idx >= 0 ? lines.slice(idx) : lines;
+    },
+    map: (r) => {
+      const desc = r["Beschreibung"] || null;
+      return {
+        bookingDate: parseDmy(r["Belegdatum"]),
+        valueDate: r["Wertstellung"] ? parseDmy(r["Wertstellung"]) : null,
+        amountCents: parseGermanAmount(r["Betrag (€)"] ?? r["Betrag"] ?? ""),
+        currency: "EUR",
+        counterpartyName: desc,
+        counterpartyIban: null,
+        purpose: desc,
         raw: r,
       };
     },

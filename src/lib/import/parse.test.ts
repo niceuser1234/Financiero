@@ -46,6 +46,29 @@ describe("parseCsv PayPal", () => {
   });
 });
 
+describe("parseCsv DKB Visa", () => {
+  it("parst DKB Visa Kreditkarte inkl. Metazeilen und Beträge", () => {
+    const content = fixture("dkb-visa.csv");
+    const { rows, errors } = parseCsv("dkb_visa", content);
+    expect(errors).toHaveLength(0);
+    expect(rows).toHaveLength(6);
+
+    const konsum = rows[0];
+    expect(konsum.bookingDate).toBe("2026-07-18");
+    expect(konsum.valueDate).toBe("2026-07-20");
+    expect(konsum.amountCents).toBe(-1005n);
+    expect(konsum.counterpartyName).toBe("KONSUM LEIPZIG EG");
+    expect(konsum.currency).toBe("EUR");
+
+    const einzahlung = rows[1];
+    expect(einzahlung.amountCents).toBe(20000n);
+    expect(einzahlung.counterpartyName).toBe("Einzahlung");
+
+    const tr = rows.find((r) => r.counterpartyName === "Trade Republic")!;
+    expect(tr.amountCents).toBe(-30300n);
+  });
+});
+
 describe("parseCsv error handling", () => {
   it("collects broken rows instead of throwing", () => {
     const broken = `Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
