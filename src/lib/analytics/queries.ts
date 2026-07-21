@@ -96,7 +96,7 @@ export async function getDashboardData(
   const savingItemIds = db
     .select({ id: recurringItems.id })
     .from(recurringItems)
-    .where(sql`${recurringItems.kind} = 'saving'`);
+    .where(and(sql`${recurringItems.kind} = 'saving'`, eq(recurringItems.status, "active")));
   const [savingExtra] = await db
     .select({ sum: sql<string>`coalesce(sum(${transactions.amountCents}), 0)` })
     .from(transactions)

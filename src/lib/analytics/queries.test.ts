@@ -126,6 +126,9 @@ describe("getDashboardData: Sparen zählt nicht als Ausgabe", () => {
   let accountId3 = "";
   let savingCatId = "";
   let foodCatId = "";
+  // Die lokale DB enthält reale Sparen-/Ausgaben-Buchungen (kein isoliertes Test-Schema) — daher
+  // per Delta statt absoluter Summe prüfen, damit der Test robust gegen Fremddaten ist.
+  let baseline: Awaited<ReturnType<typeof getDashboardData>>;
 
   async function tx3(date: string, cents: bigint, catId: string) {
     await db.insert(transactions).values({
@@ -148,6 +151,8 @@ describe("getDashboardData: Sparen zählt nicht als Ausgabe", () => {
   }
 
   beforeAll(async () => {
+    baseline = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
+
     const [a] = await db
       .insert(bankAccounts)
       .values({ name: MARK3, type: "checking", currency: "EUR", balanceCents: 0n })
@@ -170,21 +175,23 @@ describe("getDashboardData: Sparen zählt nicht als Ausgabe", () => {
 
   it("savingMonthCents erfasst Sparen, expensesMonthCents schließt es aus", async () => {
     const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
-    expect(d.savingMonthCents).toBe(-10000n);
-    expect(d.expensesMonthCents).toBe(-2000n);
+    expect(d.savingMonthCents - baseline.savingMonthCents).toBe(-10000n);
+    expect(d.expensesMonthCents - baseline.expensesMonthCents).toBe(-2000n);
   });
 
   it("byCategory (Donut) enthält keinen Slice für Sparen, wohl aber für Lebensmittel", async () => {
     const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
     expect(d.byCategory.find((c) => c.name === "Sparen & Investieren")).toBeUndefined();
-    const food = d.byCategory.find((c) => c.name === "Lebensmittel");
-    expect(food?.sumCents).toBe(-2000n);
+    const baselineFood = baseline.byCategory.find((c) => c.name === "Lebensmittel")?.sumCents ?? 0n;
+    const food = d.byCategory.find((c) => c.name === "Lebensmittel")?.sumCents ?? 0n;
+    expect(food - baselineFood).toBe(-2000n);
   });
 
   it("Trend des aktuellen Monats schließt Sparen aus", async () => {
     const d = await getDashboardData(new Date("2026-07-21"), { from: "2026-07-01", to: "2026-07-31" });
-    const current = d.trend.find((t) => t.month === "2026-07");
-    expect(current?.expenseCents).toBe(-2000n); // nur Lebensmittel, nicht die -10000 Sparen-Buchung
+    const current = d.trend.find((t) => t.month === "2026-07")?.expenseCents ?? 0n;
+    const baselineCurrent = baseline.trend.find((t) => t.month === "2026-07")?.expenseCents ?? 0n;
+    expect(current - baselineCurrent).toBe(-2000n); // nur Lebensmittel, nicht die -10000 Sparen-Buchung
   });
 });
 
