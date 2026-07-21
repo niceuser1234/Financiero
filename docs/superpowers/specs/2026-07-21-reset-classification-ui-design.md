@@ -151,12 +151,15 @@ demands:
   `onConflictDoNothing` won't update. Add a small explicit update for the
   `sparen-investieren` kind and insert the new subcategory).
 
-### Detection
+### Detection (keep simple)
 
-- LLM prompt guidance (see §2) maps broker/Sparplan deposits to
-  `sparen-investieren-sparen`.
-- Add a robust **category rule** (survives across imports): purpose contains
-  "Sparplan" → `sparen-investieren-sparen`. Seed this rule in the reset/seed path.
+- One **category rule**, seeded: purpose contains "Sparplan" →
+  `sparen-investieren-sparen`. That's the only active detection for now — the
+  user makes no other savings moves yet.
+- The structural change (the `saving` kind + "Sparen" subcategory + analytics/KPI
+  wiring) still ships, so broader detection can be added later without rework.
+- No extra counterparty/IBAN rule. LLM prompt still generally knows broker names,
+  but we don't rely on it here.
 
 ### Analytics / UI
 
