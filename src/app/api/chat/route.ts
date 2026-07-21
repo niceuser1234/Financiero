@@ -98,6 +98,31 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<unk
   }
 }
 
+type ToolSource = {
+  tool: string;
+  args: Record<string, unknown>;
+  summary: string;
+};
+
+function summarizeToolResult(name: string, args: Record<string, unknown>, result: unknown): string {
+  if (name === "query_spending" && Array.isArray(result)) {
+    const top = (result as { label: string; amountFmt: string }[])
+      .slice(0, 3)
+      .map((row) => `${row.label} ${row.amountFmt}`)
+      .join(", ");
+    return `${args.from}–${args.to}${args.filter ? ` · ${args.filter}` : ""}: ${top || "keine Treffer"}`;
+  }
+  if (name === "estimate_available" && result && typeof result === "object") {
+    const estimate = result as { days?: number; availableFmt?: string };
+    return `verfügbar in ${estimate.days} Tagen: ${estimate.availableFmt}`;
+  }
+  if (name === "list_recurring" && Array.isArray(result)) {
+    return `${result.length} aktive Verträge/Abos`;
+  }
+  if (name === "list_balances") return "Kontosalden";
+  return name;
+}
+
 export async function POST(req: Request) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
@@ -139,6 +164,7 @@ export async function POST(req: Request) {
     "content-type": "application/json",
     authorization: `Bearer ${key}`,
   };
+  const sources: ToolSource[] = [];
 
   // Bis zu 4 Tool-Runden
   for (let round = 0; round < 4; round++) {
@@ -184,6 +210,11 @@ export async function POST(req: Request) {
           args = {};
         }
         const result = await runTool(tc.function.name, args);
+        sources.push({
+          tool: tc.function.name,
+          args,
+          summary: summarizeToolResult(tc.function.name, args, result),
+        });
         messages.push({
           role: "tool",
           tool_call_id: tc.id,
@@ -193,15 +224,81 @@ export async function POST(req: Request) {
       continue;
     }
 
-    return NextResponse.json({
-      message: { role: "assistant" as const, content: msg.content ?? "" },
-    });
+    break;
   }
 
-  return NextResponse.json({
-    message: {
-      role: "assistant" as const,
-      content: "Ich habe zu viele Datenabfragen gebraucht. Bitte formuliere die Frage etwas enger.",
+  // Der abschließende Assistenten-Turn wird gestreamt, damit die Antwort direkt sichtbar wird.
+  const upstream = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model, messages, temperature: 0.3, stream: true }),
+  });
+  const upstreamBody = upstream.body;
+  if (!upstream.ok || !upstreamBody) {
+    const text = await upstream.text().catch(() => "");
+    return NextResponse.json({ error: `OpenRouter ${upstream.status}: ${text}` }, { status: 502 });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: unknown) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      };
+
+      send({ type: "sources", sources });
+      const reader = upstreamBody.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawText = false;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (payload === "[DONE]") continue;
+
+            try {
+              const chunk = JSON.parse(payload) as {
+                choices?: { delta?: { content?: string | null } }[];
+              };
+              const text = chunk.choices?.[0]?.delta?.content;
+              if (text) {
+                sawText = true;
+                send({ type: "delta", text });
+              }
+            } catch {
+              // Keep-alive or incomplete upstream lines are ignored.
+            }
+          }
+        }
+      } catch {
+        send({ type: "delta", text: "Die Antwort konnte nicht vollständig geladen werden." });
+      }
+
+      if (!sawText) {
+        send({ type: "delta", text: "Ich konnte dazu keine Antwort bilden. Bitte formuliere die Frage etwas konkreter." });
+      }
+      send({ type: "done" });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "cache-control": "no-cache, no-transform",
+      "content-type": "text/event-stream; charset=utf-8",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
     },
   });
 }
