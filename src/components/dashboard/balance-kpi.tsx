@@ -7,16 +7,18 @@ import { SegmentedControl } from "@/components/ds/segmented-control";
 
 /**
  * Gesamtsaldo vs. "Real verfügbar" (Saldo minus noch nicht abgebuchte Fixkosten
- * dieses Monats). Beantwortet: "Wie viel habe ich diesen Monat wirklich noch?"
+ * dieses Monats und minus bankseitig vorgemerkte Belastungen).
  */
 export function BalanceKpi({
   total,
   real,
   remainingFixed,
+  pendingDebits,
 }: {
   total: string;
   real: string;
   remainingFixed: string;
+  pendingDebits: string;
 }) {
   const [mode, setMode] = useState<"total" | "real">("total");
   return (
@@ -37,7 +39,7 @@ export function BalanceKpi({
           value={real}
           tone="accent"
           icon={Wallet}
-          sublabel={`Nach offenen Fixkosten (${remainingFixed})`}
+          sublabel={`Nach Vormerkungen (${pendingDebits}) und Fixkosten (${remainingFixed})`}
         />
       )}
     </div>

@@ -5,7 +5,7 @@ import { Money } from "@/components/ds/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SyncButton } from "@/components/sync-button";
+import { SyncStatus } from "@/components/sync-status";
 import { listAspsps, listConnections, reconnect, startBankConnect } from "@/lib/banking/actions";
 import { ConnectPicker } from "./connect-picker";
 
@@ -31,12 +31,12 @@ export default async function ConnectionsPage({
       <PageHeader
         title="Bankverbindungen"
         lead="DKB und Revolut via Enable Banking (PSD2)."
-        right={<SyncButton />}
+        right={<SyncStatus />}
       />
 
       {sp.connected && (
         <p className="mb-4 rounded-md bg-income-soft px-4 py-2 text-sm text-income">
-          Verbindung hergestellt. Starte einen Sync, um Umsätze zu laden.
+          Verbindung hergestellt. Die Bankdaten werden automatisch abgeglichen.
         </p>
       )}
       {sp.error && (

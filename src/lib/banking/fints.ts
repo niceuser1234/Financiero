@@ -1,4 +1,5 @@
 import { NeedTanError, type ProviderBalance, type ProviderTransaction, type ReadProvider } from "./types";
+import { fintsSidecarError, fintsSidecarUnavailable } from "./fints-sidecar-error";
 
 export interface FintsProviderConfig {
   baseUrl: string;
@@ -8,6 +9,7 @@ export interface FintsProviderConfig {
   pin: string;
   endpoint: string;
   productId: string;
+  productVersion: string;
   clientState: string;
   fetchImpl?: typeof fetch;
 }
@@ -21,6 +23,7 @@ interface RawTx {
   counterparty_name: string | null;
   counterparty_iban: string | null;
   purpose: string | null;
+  pending?: boolean;
   raw: unknown;
 }
 
@@ -34,17 +37,23 @@ export class FintsProvider implements ReadProvider {
     return {
       blz: this.cfg.blz, user: this.cfg.user, pin: this.cfg.pin,
       endpoint: this.cfg.endpoint, product_id: this.cfg.productId,
+      product_version: this.cfg.productVersion,
       client_state: this.cfg.clientState,
     };
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await this.fetchImpl(`${this.cfg.baseUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Internal-Token": this.cfg.token },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`FinTS-Sidecar ${res.status}: ${await res.text().catch(() => "")}`);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.cfg.baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Token": this.cfg.token },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw fintsSidecarUnavailable();
+    }
+    if (!res.ok) throw await fintsSidecarError(res);
     return (await res.json()) as T;
   }
 
@@ -67,6 +76,7 @@ export class FintsProvider implements ReadProvider {
       amountCents: BigInt(t.amount_cents), currency: t.currency,
       counterpartyName: t.counterparty_name, counterpartyIban: t.counterparty_iban,
       purpose: t.purpose, raw: t.raw,
+      pending: t.pending ?? false,
     }));
   }
 }

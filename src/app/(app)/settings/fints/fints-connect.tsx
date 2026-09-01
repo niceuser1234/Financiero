@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { startFintsConnect, confirmFintsTan, reconnectFints } from "@/lib/banking/fints-actions";
+import {
+  startFintsConnect,
+  confirmFintsTan,
+  reconnectFints,
+  type FintsConnectResult,
+} from "@/lib/banking/fints-actions";
 
 type Phase = "form" | "reconnect" | "waiting" | "done";
 
@@ -14,15 +19,44 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
     existing?.status === "active" ? "done" : existing?.status === "expired" ? "reconnect" : "form";
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [challenge, setChallenge] = useState("");
+  const [pendingConnectionId, setPendingConnectionId] = useState<string | null>(null);
+  const [manualCheck, setManualCheck] = useState(false);
 
   const idlePhase: Phase = existing?.status === "expired" ? "reconnect" : "form";
 
-  async function poll(connectionId: string) {
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
+  function completeConnection() {
+    setPendingConnectionId(null);
+    setManualCheck(false);
+    setPhase("done");
+    toast.success("DKB verbunden");
+  }
+
+  function beginWaiting(res: FintsConnectResult) {
+    setChallenge(res.challenge ?? "Bitte in der DKB-App bestätigen");
+    setPendingConnectionId(res.connectionId);
+    setPhase("waiting");
+    if (res.automatedPollingAllowed === false) {
+      setManualCheck(true);
+      return;
+    }
+    setManualCheck(false);
+    void poll(res.connectionId, res);
+  }
+
+  async function poll(connectionId: string, initial: FintsConnectResult) {
+    const maxAttempts = Math.min(120, Math.max(1, initial.maxPollAttempts ?? 40));
+    let waitSeconds = Math.max(3, initial.pollAfterSeconds ?? 5);
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000));
       try {
         const res = await confirmFintsTan(connectionId);
-        if (res.status === "connected") { setPhase("done"); toast.success("DKB verbunden"); return; }
+        if (res.status === "connected") { completeConnection(); return; }
+        setChallenge(res.challenge ?? "Bitte in der DKB-App bestätigen");
+        if (res.automatedPollingAllowed === false) {
+          setManualCheck(true);
+          return;
+        }
+        waitSeconds = Math.max(3, res.pollIntervalSeconds ?? initial.pollIntervalSeconds ?? 5);
       } catch (err) {
         toast.error("Freigabe fehlgeschlagen", { description: (err as Error).message });
         setPhase(idlePhase); return;
@@ -32,6 +66,19 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
     setPhase(idlePhase);
   }
 
+  async function onCheckApproval() {
+    if (!pendingConnectionId) return;
+    setManualCheck(false);
+    try {
+      const res = await confirmFintsTan(pendingConnectionId);
+      if (res.status === "connected") { completeConnection(); return; }
+      beginWaiting(res);
+    } catch (err) {
+      toast.error("Freigabe fehlgeschlagen", { description: (err as Error).message });
+      setPhase(idlePhase);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -39,12 +86,9 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
       const res = await startFintsConnect({
         blz: String(fd.get("blz")), user: String(fd.get("user")),
         pin: String(fd.get("pin")), endpoint: String(fd.get("endpoint")),
-        productId: String(fd.get("productId")),
       });
-      if (res.status === "connected") { setPhase("done"); toast.success("DKB verbunden"); return; }
-      setChallenge(res.challenge ?? "Bitte in der DKB-App bestätigen");
-      setPhase("waiting");
-      poll(res.connectionId);
+      if (res.status === "connected") { completeConnection(); return; }
+      beginWaiting(res);
     } catch (err) {
       toast.error("Verbindung fehlgeschlagen", { description: (err as Error).message });
     }
@@ -54,10 +98,8 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
     if (!existing) return;
     try {
       const res = await reconnectFints(existing.id);
-      if (res.status === "connected") { setPhase("done"); toast.success("DKB verbunden"); return; }
-      setChallenge(res.challenge ?? "Bitte in der DKB-App bestätigen");
-      setPhase("waiting");
-      poll(existing.id);
+      if (res.status === "connected") { completeConnection(); return; }
+      beginWaiting(res);
     } catch (err) {
       toast.error("Freigabe fehlgeschlagen", { description: (err as Error).message });
     }
@@ -71,6 +113,11 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
       <div className="space-y-2">
         <p className="text-sm font-medium">Bitte in der DKB-App bestätigen…</p>
         <p className="text-sm text-muted-foreground">{challenge}</p>
+        {manualCheck && (
+          <Button type="button" variant="outline" onClick={onCheckApproval}>
+            Bestätigung prüfen
+          </Button>
+        )}
       </div>
     );
 
@@ -92,7 +139,6 @@ export function FintsConnect({ existing }: { existing?: { id: string; status: st
       <div><Label htmlFor="user">Anmeldename</Label><Input id="user" name="user" required /></div>
       <div><Label htmlFor="pin">Banking-PIN</Label><Input id="pin" name="pin" type="password" required /></div>
       <div><Label htmlFor="endpoint">FinTS-Endpoint</Label><Input id="endpoint" name="endpoint" defaultValue="https://fints.dkb.de/fints" /></div>
-      <div><Label htmlFor="productId">Produkt-ID</Label><Input id="productId" name="productId" required /></div>
       <Button type="submit">Verbinden</Button>
     </form>
   );

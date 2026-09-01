@@ -8,6 +8,7 @@ import {
   snapshotForPrompt,
 } from "@/lib/chat/queries";
 import { CHAT_SYSTEM } from "@/lib/chat/system";
+import { isLlmEnabled, llmBaseUrl } from "@/lib/local-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,6 +125,13 @@ function summarizeToolResult(name: string, args: Record<string, unknown>, result
 }
 
 export async function POST(req: Request) {
+  if (!isLlmEnabled()) {
+    return NextResponse.json(
+      { error: "LLM ist im lokalen Sicherheitsmodus deaktiviert" },
+      { status: 503 },
+    );
+  }
+
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     return NextResponse.json({ error: "OPENROUTER_API_KEY fehlt" }, { status: 503 });
@@ -141,7 +149,12 @@ export async function POST(req: Request) {
   }
 
   const model = process.env.CHAT_MODEL ?? process.env.CLASSIFY_MODEL ?? "google/gemini-2.5-flash";
-  const base = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+  let base: string;
+  try {
+    base = llmBaseUrl();
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 503 });
+  }
 
   const snapshot = await snapshotForPrompt();
   const system = `${CHAT_SYSTEM}\n\nAktueller Daten-Snapshot (als Ausgangspunkt, Tools für Details nutzen):\n${JSON.stringify(snapshot, null, 0).slice(0, 12000)}`;

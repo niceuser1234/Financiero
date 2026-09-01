@@ -9,10 +9,10 @@ import { KpiCard } from "@/components/ds/kpi-card";
 import { EmptyState } from "@/components/ds/empty-state";
 import { Money } from "@/components/ds/money";
 import { TransactionRow } from "@/components/ds/transaction-row";
-import { SyncButton } from "@/components/sync-button";
+import { SyncStatus } from "@/components/sync-status";
 import { CategoryDonut } from "@/components/charts/category-donut";
 import { ReclassifyBanner } from "@/components/classify/reclassify-banner";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       <PageHeader
         title="Dashboard"
         lead="Überblick über deine Finanzen."
-        right={<SyncButton />}
+        right={<SyncStatus />}
       />
 
       {warnings.map((w) => (
@@ -78,6 +78,7 @@ export default async function DashboardPage() {
           total={dto.totalBalanceFmt}
           real={dto.realAvailableFmt}
           remainingFixed={dto.remainingFixedFmt}
+          pendingDebits={dto.pendingDebitsFmt}
         />
         <KpiCard
           label="Einnahmen"
@@ -129,9 +130,12 @@ export default async function DashboardPage() {
                 title="Noch kein Konto"
                 message="Verbinde dein Konto oder importiere eine CSV-Datei."
                 action={
-                  <Button render={<Link href="/settings/connections" />} size="sm">
+                  <Link
+                    href="/settings/connections"
+                    className={buttonVariants({ size: "sm" })}
+                  >
                     Konto verbinden
-                  </Button>
+                  </Link>
                 }
               />
             ) : (
@@ -163,9 +167,12 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Letzte Umsätze</CardTitle>
             <CardAction>
-              <Button render={<Link href="/transactions" />} variant="ghost" size="sm">
+              <Link
+                href="/transactions"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
                 Alle Umsätze
-              </Button>
+              </Link>
             </CardAction>
           </CardHeader>
           <CardContent className="px-3">
@@ -200,7 +207,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Anstehende Abbuchungen</CardTitle>
-            <CardDescription>Nächste 2 Abbuchungen</CardDescription>
+            <CardDescription>Vorgemerkt und nächste Fixkosten</CardDescription>
           </CardHeader>
           <CardContent>
             {dto.upcoming.length === 0 ? (
@@ -221,7 +228,9 @@ export default async function DashboardPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] font-medium text-ink-900">{u.name}</div>
-                    <div className="text-[11.5px] text-ink-400">{u.dateFmt}</div>
+                    <div className="text-[11.5px] text-ink-400">
+                      {u.kind === "pending" ? "Vorgemerkt" : "Erwartet"} · {u.dateFmt}
+                    </div>
                   </div>
                   <Money.Text value={u.fmt} className="text-sm" />
                 </div>

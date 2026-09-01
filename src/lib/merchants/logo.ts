@@ -44,6 +44,9 @@ function slugCandidates(name: string): string[] {
 
 /** Liefert eine Logo-URL (Google Favicon Service) oder null. */
 export function logoUrlFor(name: string | null | undefined): string | null {
+  // Im Standardbetrieb keine händlerbezogenen Anfragen an Google senden.
+  // Ein bewusstes Opt-in wird beim Build in den Client eingebettet.
+  if (process.env.NEXT_PUBLIC_REMOTE_MERCHANT_LOGOS !== "true") return null;
   if (!name?.trim()) return null;
   const brand = matchBrand(name);
   const domain =

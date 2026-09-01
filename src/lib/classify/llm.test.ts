@@ -33,7 +33,7 @@ async function ensureAccount() {
 }
 
 async function seedTx(cp: string, cents: bigint) {
-  await db.insert(transactions).values({
+  const [row] = await db.insert(transactions).values({
     accountId,
     bookingDate: "2026-07-01",
     amountCents: cents,
@@ -41,7 +41,8 @@ async function seedTx(cp: string, cents: bigint) {
     counterpartyName: cp,
     categorizationSource: "none",
     importHash: importHash({ accountId, bookingDate: "2026-07-01", amountCents: cents, currency: "EUR", counterparty: cp, purpose: null }),
-  });
+  }).returning({ id: transactions.id });
+  return row.id;
 }
 
 describe("chunking", () => {
@@ -63,16 +64,18 @@ describe("classifyUnknownFingerprints (synchronous)", () => {
 
   it("applies results in one pass, learns merchants, caps invalid slug to sonstiges", async () => {
     await ensureAccount();
-    await seedTx("GLSHOP", -1500n);
-    await seedTx("GLSHOP", -1600n); // same fp -> one representative, both tx updated
-    await seedTx("WEIRDCO", -4200n);
+    const txIds = [
+      await seedTx("GLSHOP", -1500n),
+      await seedTx("GLSHOP", -1600n), // same fp -> one representative, both tx updated
+      await seedTx("WEIRDCO", -4200n),
+    ];
 
     const client = fakeClient({
       [fingerprintOf("GLSHOP", null)]: { slug: "lebensmittel-supermarkt", name: "GL Shop" },
       [fingerprintOf("WEIRDCO", null)]: { slug: "not_a_real_slug", name: "Weird Co" },
     });
 
-    const out = await classifyUnknownFingerprints(client);
+    const out = await classifyUnknownFingerprints(client, txIds);
     expect(out.classified).toBe(3);
 
     const rows = await db.select().from(transactions).where(eq(transactions.accountId, accountId));

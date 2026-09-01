@@ -2,16 +2,18 @@
 
 Persönlicher Finanz-Aggregator (Finanzguru-inspiriert): alle Konten (DKB, Revolut via
 Enable Banking, PayPal via CSV) an einem Ort, automatische LLM-Kategorisierung, Abo-/
-Vertragserkennung, Analyse-Dashboard, installierbar als PWA. Single-User, EU-gehostet.
+Vertragserkennung, Analyse-Dashboard, installierbar als PWA. Aktuell Single-User und
+standardmäßig im strikten lokalen Modus.
 
 - **Spec:** [`docs/superpowers/specs/2026-07-18-financiero-design.md`](docs/superpowers/specs/2026-07-18-financiero-design.md)
 - **Umsetzungsplan:** [`docs/superpowers/plans/2026-07-18-financiero-implementation.md`](docs/superpowers/plans/2026-07-18-financiero-implementation.md)
 - **Recherche (Banking-Anbindung):** [`docs/superpowers/research/2026-07-18-banking-anbindung.md`](docs/superpowers/research/2026-07-18-banking-anbindung.md)
+- **Recherche (Local-First-Deployment):** [`docs/research/2026-07-27-local-first-deployment.md`](docs/research/2026-07-27-local-first-deployment.md)
 
 ## Stack
 
 Next.js 16 (App Router) · React 19 · Tailwind v4 · shadcn/ui · Recharts · Drizzle ORM ·
-PostgreSQL 16 · better-auth · Anthropic Message Batches API · Vitest.
+PostgreSQL 16 · python-fints Sidecar · OpenAI-kompatible LLM-Schnittstelle · Vitest.
 
 ## Lokale Entwicklung
 
@@ -25,17 +27,22 @@ docker compose up -d
 # 2. Env & Secrets
 cp .env.example .env
 #   APP_SIGNING_SECRET / ENCRYPTION_KEY / CRON_SECRET je: openssl rand -hex 32
-#   ENABLE_BANKING_APP_ID + ENABLE_BANKING_PRIVATE_KEY (base64-PEM) aus dem Enable-Banking-Control-Panel
-#   ANTHROPIC_API_KEY für die Klassifizierung
+#   FINTS_SIDECAR_TOKEN: openssl rand -hex 32
+#   FINTS_PRODUCT_ID: Registrierungsnummer der Deutschen Kreditwirtschaft
 
 # 3. Schema & Seed
 npm install
 npm run db:push
 npm run db:seed          # 58 Kategorien
 
-# 4. Starten
-npm run dev              # http://localhost:3000  → öffnet direkt (kein Login, Single-User)
+# 4. FinTS-Sidecar und App gemeinsam starten
+npm run dev:local        # App: http://localhost:3000
 ```
+
+Port `8790` gehört nur zum internen FinTS-Hintergrunddienst. Wer ihn im Browser öffnet,
+bekommt deshalb eine Statusseite mit einem Link zur eigentlichen App statt einer 404-Meldung.
+Der Entwicklungsserver bindet bewusst nur an `127.0.0.1`, weil die aktuelle Single-User-App
+noch keine Anmeldung besitzt.
 
 Tests & Checks:
 
@@ -47,9 +54,10 @@ npm run build            # Production-Build
 
 ## Konten anbinden
 
-- **DKB / Revolut:** Einstellungen → Bankverbindungen → Bank wählen → bei der Bank
-  autorisieren (DKB: **App-Redirect-Flow** wählen). Consent gilt ~90 Tage, danach zeigt das
-  Dashboard ein „neu verbinden"-Banner.
+- **DKB:** Einstellungen → DKB via FinTS → Anmeldename und PIN eingeben → in der DKB-App
+  bestätigen. Die Produkt-ID kommt ausschließlich aus der lokalen Server-Konfiguration.
+- **Enable Banking / Revolut:** Im strikten lokalen Modus deaktiviert, da die Daten über einen
+  externen Aggregator laufen würden.
 - **PayPal:** kein PSD2-Zugang für Privatkonten → Einstellungen → CSV-Import (Aktivitäten-
   Export). PayPal-Zahlungen, die als DKB-Lastschrift erscheinen, werden automatisch auf den
   echten Händler „entpackt".
@@ -60,41 +68,31 @@ npm run build            # Production-Build
 
 Unter **Assistent** kannst du in natürlicher Sprache Fragen zu deinen Konten stellen
 (Ausgaben nach Kategorie, Abos,  geschätzter Spielraum für die nächsten Tage).
-Nutzt `OPENROUTER_API_KEY` und optional `CHAT_MODEL` (Default: derselbe wie `CLASSIFY_MODEL`).
+Der LLM-Pfad ist im strikten lokalen Modus zunächst deaktiviert. Für Ollama kann später
+`OPENROUTER_BASE_URL=http://127.0.0.1:11434/v1` gesetzt und `LLM_ENABLED=true` aktiviert
+werden. Nicht-lokale LLM-URLs werden bei `STRICT_LOCAL_MODE=true` abgewiesen.
 
 ## Klassifizierung
 
-Deterministische Regeln zuerst (0 Kosten), dann Claude-Batch für unbekannte Händler
-(`CLASSIFY_MODEL`, Default `claude-opus-4-8`; `claude-haiku-4-5` als günstigere Option).
-Es werden nur unbekannte Händler-Fingerprints klassifiziert (je einmal, gelernt) — nicht jede
-Buchung. Ergebnisse eines Batches werden beim nächsten Cron-Lauf eingespielt. Manuelle
-Korrekturen erzeugen dauerhafte Regeln; unsichere Zuordnungen landen in der Review-Queue.
+Deterministische Regeln laufen immer lokal. Die optionale LLM-Klassifizierung für unbekannte
+Händler verwendet denselben lokalen OpenAI-kompatiblen Endpunkt wie der Assistent. Manuelle
+Korrekturen erzeugen dauerhafte Regeln.
 
-## Deployment (Vercel + Neon, EU)
+## Deployment
 
-1. **Neon** (Region *AWS eu-central-1 / Frankfurt*): Projekt anlegen → Connection-String als
-   `DATABASE_URL`.
-2. **Vercel:** Repo importieren, Region auf `fra1` setzen (`vercel.json` fixiert die Cron-Zeiten).
-   Environment-Variablen setzen (alle aus `.env.example`; `APP_BASE_URL`/`BETTER_AUTH_URL` =
-   Produktions-URL). Der Enable-Banking-Redirect zeigt auf `<APP_BASE_URL>/api/banking/callback`
-   — diese URL im Enable-Banking-Control-Panel als erlaubte Redirect-URL hinterlegen.
-3. **Schema:** `DATABASE_URL=<neon> npm run db:push && npm run db:seed`.
-4. **Cron:** `vercel.json` triggert `/api/cron/sync` um 04:30 und 16:30 UTC (≈ 06:30/18:30
-   Berlin), geschützt per `CRON_SECRET`.
-5. **PWA:** über HTTPS „Zum Startbildschirm hinzufügen" (iOS/Android) → installierbar.
-
-**Selfhost-Alternative:** identischer Code via `docker compose` (App + Postgres); statt Vercel
-Cron ein System-Cron/`node-cron`, der `GET /api/cron/sync` mit `Authorization: Bearer $CRON_SECRET`
-aufruft.
+Empfohlen ist ein dedizierter Host im eigenen Netz mit WireGuard, HTTPS-Reverse-Proxy,
+internem PostgreSQL, lokalem FinTS-Sidecar und lokalem Ollama/llama.cpp. Die bestehende
+`docker-compose.yml` ist nur für die Entwicklung geeignet und noch kein Produktions-Stack.
+Architektur, Hardware-Abwägung, Local-LLM-Konfiguration, Mehrbenutzergrenzen und Rollout stehen
+in der [Local-First-Recherche](docs/research/2026-07-27-local-first-deployment.md).
 
 ## Sicherheit
 
-Secrets nur serverseitig; Enable-Banking-Session AES-256-GCM-verschlüsselt in der DB; an die
-Anthropic-API gehen ausschließlich pseudonyme Händler-Strings (keine IBANs, Salden oder Namen).
+Secrets nur serverseitig; FinTS-PIN, Dialog- und Client-Zustand liegen AES-256-GCM-verschlüsselt
+in PostgreSQL. Cloud-LLM, Enable Banking, externe Händlerlogos, Google-Fonts und Next-Telemetrie
+sind im lokalen Standardmodus deaktiviert.
 
 **Kein Login (Single-User-App).** Die App hat keine Authentifizierung — wer die URL erreicht,
-sieht die Daten. Lokal ist das unkritisch. **Bei einem öffentlichen Deployment musst du den
-Zugang auf Netzwerkebene schützen**, z.B. Vercel Password Protection / Vercel Authentication,
-einen Reverse-Proxy mit Basic-Auth oder eine IP-Allowlist. Der Cron-Endpoint (`/api/cron/sync`)
-und der Banking-Callback bleiben unabhängig davon per `CRON_SECRET` bzw. signiertem
-State-Token geschützt.
+sieht die Daten. Sie darf deshalb nicht öffentlich erreichbar sein. Für den eigenen Betrieb nur
+über ein privates VPN zugänglich machen. Für Freunde ist vorab echte Authentifizierung und
+vollständige Tenant-Isolation nötig; die aktuelle App ist dafür nicht freigabefähig.

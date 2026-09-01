@@ -22,6 +22,8 @@ export interface ProviderTransaction {
   counterpartyName: string | null;
   counterpartyIban: string | null;
   purpose: string | null;
+  /** Von der Bank vorgemerkt, aber noch nicht endgültig gebucht. */
+  pending?: boolean;
   raw: unknown;
 }
 

@@ -1,7 +1,7 @@
 import { AnalysisView } from "@/components/analysis/analysis-view";
-import { getAnalyticsDTO } from "@/lib/analytics/actions";
+import { getAnalysisDTO } from "@/lib/analytics/actions";
 
 export default async function AnalysisPage() {
-  const initial = await getAnalyticsDTO();
+  const initial = await getAnalysisDTO();
   return <AnalysisView initial={initial} />;
 }

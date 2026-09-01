@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, categories, llmRuns, merchants, transactions } from "@/db/schema";
+import { isLlmEnabled, llmBaseUrl } from "@/lib/local-mode";
 import { fingerprintOf, matchBrand } from "./normalize";
 import {
   buildSystemPrompt,
@@ -25,7 +26,7 @@ export interface ChatClient {
 
 /** Default: OpenRouter Chat Completions (OpenAI-kompatibel) via fetch. */
 function defaultClient(): ChatClient {
-  const base = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+  const base = llmBaseUrl();
   const key = process.env.OPENROUTER_API_KEY;
   return {
     async chat({ model, system, user }) {
@@ -76,8 +77,12 @@ function magnitude(cents: bigint): string {
  * Gibt die Anzahl aktualisierter Transaktionen zurück.
  */
 export async function classifyUnknownFingerprints(
-  client: ChatClient = defaultClient(),
+  client?: ChatClient,
+  txIds?: string[],
 ): Promise<{ classified: number }> {
+  if (!client && !isLlmEnabled()) return { classified: 0 };
+  if (txIds && txIds.length === 0) return { classified: 0 };
+  const chatClient = client ?? defaultClient();
   const knownMerchants = new Set((await db.select({ fp: merchants.fingerprint }).from(merchants)).map((m) => m.fp));
 
   const rows = await db
@@ -95,6 +100,7 @@ export async function classifyUnknownFingerprints(
         eq(transactions.isTransfer, false),
         isNull(transactions.merchantId),
         or(eq(transactions.categorizationSource, "none"), eq(transactions.categorizationSource, "import")),
+        txIds ? inArray(transactions.id, txIds) : undefined,
       ),
     );
 
@@ -133,7 +139,7 @@ export async function classifyUnknownFingerprints(
 
   try {
     for (const group of chunk(items, CHUNK_SIZE)) {
-      const { text, inputTokens: it, outputTokens: ot } = await client.chat({
+      const { text, inputTokens: it, outputTokens: ot } = await chatClient.chat({
         model: MODEL,
         system,
         user: buildUserContent(group),

@@ -90,7 +90,9 @@
   --dur: 180ms;
 
   /* --- Typografie --- */
-  --font-display: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
+  --font-sans-local: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono-local: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-display: var(--font-sans-local);
   --tracking-label: 0.09em;
   --tracking-tight: -0.02em;
 
@@ -191,8 +193,8 @@
   --color-chart-7: var(--chart-7);
   --color-chart-8: var(--chart-8);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans-local);
+  --font-mono: var(--font-mono-local);
   --font-display: var(--font-display);
   --font-heading: var(--font-display);
 

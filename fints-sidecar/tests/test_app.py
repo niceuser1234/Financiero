@@ -5,6 +5,18 @@ from fints_sidecar.app import app
 
 client = TestClient(app)
 
+def test_root_explains_that_the_app_uses_port_3000():
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "FinTS-Hintergrunddienst läuft" in r.text
+    assert "http://localhost:3000" in r.text
+    assert "npm run dev</code>" in r.text
+    assert "npm run dev:local" in r.text
+
+def test_favicon_does_not_log_a_not_found_error():
+    r = client.get("/favicon.ico")
+    assert r.status_code == 204
+
 def test_health_ok_with_token():
     r = client.get("/health", headers={"X-Internal-Token": "test-token"})
     assert r.status_code == 200
@@ -15,12 +27,13 @@ def test_health_rejects_missing_token():
     assert r.status_code == 401
 
 from fints_sidecar.app import get_gateway
+from fints_sidecar.gateway import GatewayError
 
 class FakeGateway:
-    def connect(self, blz, user, pin, endpoint, product_id):
+    def connect(self, blz, user, pin, endpoint, product_id, product_version):
         return {"status": "need_tan", "decoupled": True, "challenge": "tap app",
                 "pending_state": "cGVuZA==", "client_state": "c3RhdGU="}
-    def confirm(self, pending_state, tan):
+    def confirm(self, creds, pending_state, tan):
         return {"status": "connected", "client_state": "c3RhdGU=",
                 "accounts": [{"iban": "DE1", "name": "Giro", "currency": "EUR", "type": "checking"}]}
     def balances(self, creds, client_state, ibans):
@@ -37,13 +50,17 @@ H = {"X-Internal-Token": "test-token"}
 def test_connect_returns_need_tan():
     r = client.post("/connect", headers=H, json={
         "blz": "12030000", "user": "u", "pin": "p",
-        "endpoint": "https://fints.dkb.de/fints", "product_id": "x"})
+        "endpoint": "https://fints.dkb.de/fints", "product_id": "x",
+        "product_version": "0.1.0"})
     assert r.status_code == 200
     assert r.json()["status"] == "need_tan"
     assert r.json()["decoupled"] is True
 
 def test_confirm_returns_connected_with_accounts():
-    r = client.post("/connect/confirm", headers=H, json={"pending_state": "cGVuZA==", "tan": ""})
+    r = client.post("/connect/confirm", headers=H, json={
+        "blz": "12030000", "user": "u", "pin": "p", "endpoint": "e",
+        "product_id": "x", "product_version": "0.1.0",
+        "pending_state": "cGVuZA==", "tan": ""})
     body = r.json()
     assert body["status"] == "connected"
     assert body["accounts"][0]["iban"] == "DE1"
@@ -51,7 +68,35 @@ def test_confirm_returns_connected_with_accounts():
 def test_transactions_maps_contract():
     r = client.post("/transactions", headers=H, json={
         "blz": "12030000", "user": "u", "pin": "p", "endpoint": "e",
-        "product_id": "x", "client_state": "c3RhdGU=", "iban": "DE1", "since": "2026-06-01"})
+        "product_id": "x", "product_version": "0.1.0",
+        "client_state": "c3RhdGU=", "iban": "DE1", "since": "2026-06-01"})
     body = r.json()
     assert body["status"] == "ok"
     assert body["transactions"][0]["amount_cents"] == -1299
+
+
+def test_gateway_error_is_returned_without_internal_traceback():
+    class ErrorGateway(FakeGateway):
+        def connect(self, blz, user, pin, endpoint, product_id, product_version):
+            raise GatewayError(
+                503,
+                "product_registration_pending",
+                "Die DKB kennt die FinTS-Produkt-ID noch nicht (Bankcode 9078).",
+            )
+
+    app.dependency_overrides[get_gateway] = lambda: ErrorGateway()
+    try:
+        r = client.post("/connect", headers=H, json={
+            "blz": "12030000", "user": "u", "pin": "p",
+            "endpoint": "https://fints.dkb.de/fints", "product_id": "x",
+            "product_version": "0.1.0"})
+    finally:
+        app.dependency_overrides[get_gateway] = lambda: FakeGateway()
+
+    assert r.status_code == 503
+    assert r.json() == {
+        "detail": {
+            "code": "product_registration_pending",
+            "message": "Die DKB kennt die FinTS-Produkt-ID noch nicht (Bankcode 9078).",
+        },
+    }

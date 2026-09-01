@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { brandKeyOf, fingerprintOf, isNonRecurringBrand, matchBrand, normalizePurpose, unwrapPaypal } from "./normalize";
+import {
+  brandKeyOf,
+  fingerprintOf,
+  isNonRecurringBrand,
+  matchBrand,
+  normalizePurpose,
+  stripLeadingIban,
+  unwrapPaypal,
+} from "./normalize";
+
+describe("stripLeadingIban", () => {
+  it("cleans DKB MT940 applicant names", () => {
+    expect(stripLeadingIban("DE63120300000001999333DKB")).toBe("DKB");
+    expect(stripLeadingIban("LU89751000135104200EPayPal Europe S.a.r.l.")).toBe(
+      "PayPal Europe S.a.r.l.",
+    );
+  });
+
+  it("keeps normal merchant names", () => {
+    expect(stripLeadingIban("Studentenwerk Leipzig")).toBe("Studentenwerk Leipzig");
+  });
+});
 
 describe("normalizePurpose", () => {
   it("strips sepa boilerplate", () => {
@@ -40,6 +61,14 @@ describe("fingerprintOf", () => {
     expect(fingerprintOf("PayPal Europe S.a.r.l.", "PP.1.PP . NETFLIX, Ihr Einkauf bei NETFLIX")).toBe(
       "netflix",
     );
+  });
+  it("ignores an MT940 IBAN prefix for merchant matching", () => {
+    expect(
+      fingerprintOf(
+        "LU89751000135104200EPayPal Europe S.a.r.l.",
+        "PP.1.PP . NETFLIX, Ihr Einkauf bei NETFLIX",
+      ),
+    ).toBe("netflix");
   });
   it("unifies anthropic/claude variants", () => {
     expect(fingerprintOf("CLAUDE.AI SUBSCRIPTION", "CLAUDE.AI SUBSCRIPTION")).toBe("anthropic claude");

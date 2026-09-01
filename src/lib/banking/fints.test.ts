@@ -10,6 +10,7 @@ function cfg(fetchImpl: typeof fetch): FintsProviderConfig {
   return {
     baseUrl: "http://127.0.0.1:8790", token: "tok", blz: "12030000", user: "u",
     pin: "p", endpoint: "https://fints.dkb.de/fints", productId: "x",
+    productVersion: "0.1.0",
     clientState: "c3RhdGU=", fetchImpl,
   };
 }
@@ -23,6 +24,18 @@ describe("FintsProvider.fetchBalances", () => {
     expect(res[0].accountUid).toBe("DE1");
     expect((f.mock.calls[0][0] as string)).toContain("/balances");
     expect((f.mock.calls[0][1] as RequestInit).headers).toMatchObject({ "X-Internal-Token": "tok" });
+  });
+
+  it("surfaces a structured bank error", async () => {
+    const f = vi.fn().mockResolvedValue(json({
+      detail: {
+        code: "product_registration_pending",
+        message: "Die DKB kennt die FinTS-Produkt-ID noch nicht (Bankcode 9078).",
+      },
+    }, false, 503));
+    const p = new FintsProvider(cfg(f as unknown as typeof fetch));
+
+    await expect(p.fetchBalances("", ["DE1"])).rejects.toThrow("Bankcode 9078");
   });
 });
 
@@ -42,5 +55,19 @@ describe("FintsProvider.fetchTransactions", () => {
     const f = vi.fn().mockResolvedValue(json({ status: "need_tan" }));
     const p = new FintsProvider(cfg(f as unknown as typeof fetch));
     await expect(p.fetchTransactions("", "DE1", "2026-06-01")).rejects.toBeInstanceOf(NeedTanError);
+  });
+
+  it("preserves the pending marker from the sidecar", async () => {
+    const f = vi.fn().mockResolvedValue(json({ status: "ok", transactions: [{
+      entry_ref: null, booking_date: "2026-08-17", value_date: null, amount_cents: -65200,
+      currency: "EUR", counterparty_name: "Airline", counterparty_iban: null,
+      purpose: "Flugbuchung", pending: true, raw: {},
+    }] }));
+    const p = new FintsProvider(cfg(f as unknown as typeof fetch));
+
+    const [transaction] = await p.fetchTransactions("", "DE1", "2026-08-01");
+
+    expect(transaction.pending).toBe(true);
+    expect(transaction.amountCents).toBe(-65200n);
   });
 });

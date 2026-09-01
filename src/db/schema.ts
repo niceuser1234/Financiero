@@ -134,6 +134,33 @@ export const transactions = pgTable(
   ],
 );
 
+/**
+ * Momentaufnahme der von der Bank vorgemerkten, noch nicht gebuchten Umsätze.
+ * Sie werden bei jedem erfolgreichen Konten-Sync vollständig ersetzt und daher
+ * bewusst getrennt von den dauerhaften Buchungen gespeichert.
+ */
+export const pendingTransactions = pgTable(
+  "pending_transactions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    accountId: text("account_id").notNull().references(() => bankAccounts.id),
+    bookingDate: date("booking_date").notNull(),
+    amountCents: bigint("amount_cents", { mode: "bigint" }).notNull(),
+    currency: text("currency").notNull().default("EUR"),
+    counterpartyName: text("counterparty_name"),
+    counterpartyIban: text("counterparty_iban"),
+    purpose: text("purpose"),
+    importHash: text("import_hash").notNull(),
+    raw: jsonb("raw"),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("pending_tx_import_hash").on(t.importHash),
+    index("pending_tx_account").on(t.accountId),
+    index("pending_tx_booking").on(t.bookingDate),
+  ],
+);
+
 export const categoryRules = pgTable("category_rules", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   priority: integer("priority").notNull().default(100),
@@ -184,5 +211,6 @@ export type Merchant = typeof merchants.$inferSelect;
 export type RecurringItem = typeof recurringItems.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type PendingTransaction = typeof pendingTransactions.$inferSelect;
 export type CategoryRule = typeof categoryRules.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;

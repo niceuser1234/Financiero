@@ -1,14 +1,17 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { bankAccounts, connections, syncRuns, transactions } from "@/db/schema";
+import { bankAccounts, connections, pendingTransactions, syncRuns, transactions } from "@/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { importHash } from "@/lib/import/hash";
+import { isEnableBankingEnabled } from "@/lib/local-mode";
 import { enableBankingFromEnv } from "./enable-banking";
 import { FintsProvider } from "./fints";
+import { getFintsProductId, getFintsProductVersion } from "./fints-config";
 import { NeedTanError, type ProviderTransaction, type ReadProvider } from "./types";
 
 export interface SyncStats {
   newTx: number;
+  pendingTx: number;
   accounts: number;
   errors: string[];
 }
@@ -19,6 +22,8 @@ export interface SyncOptions {
   /** Nachverarbeitung (unwrap/match/rules/recurring) — wird in späteren Phasen gefüllt. */
   postProcess?: (insertedTxIds: string[]) => Promise<void>;
   today?: Date;
+  /** Begrenzung für isolierte Tests; reguläre Syncs lassen dies leer. */
+  connectionIds?: string[];
 }
 
 const DAYS = 24 * 3600 * 1000;
@@ -65,6 +70,49 @@ function toRow(accountId: string, t: ProviderTransaction) {
   };
 }
 
+function toPendingRow(accountId: string, t: ProviderTransaction, observedAt: Date) {
+  const hash = importHash({
+    accountId,
+    bookingDate: t.bookingDate,
+    amountCents: t.amountCents,
+    currency: t.currency,
+    counterparty: t.counterpartyName,
+    purpose: t.purpose,
+  });
+  return {
+    accountId,
+    bookingDate: t.bookingDate,
+    amountCents: t.amountCents,
+    currency: t.currency,
+    counterpartyName: t.counterpartyName,
+    counterpartyIban: t.counterpartyIban,
+    purpose: t.purpose,
+    importHash: hash,
+    raw: t.raw as object,
+    observedAt,
+  };
+}
+
+async function replacePendingTransactions(
+  accountId: string,
+  pending: ProviderTransaction[],
+  observedAt: Date,
+): Promise<void> {
+  const seen = new Set<string>();
+  const rows = pending
+    .map((transaction) => toPendingRow(accountId, transaction, observedAt))
+    .filter((row) => {
+      if (seen.has(row.importHash)) return false;
+      seen.add(row.importHash);
+      return true;
+    });
+
+  await db.transaction(async (tx) => {
+    await tx.delete(pendingTransactions).where(eq(pendingTransactions.accountId, accountId));
+    if (rows.length > 0) await tx.insert(pendingTransactions).values(rows).onConflictDoNothing();
+  });
+}
+
 function buildProvider(conn: typeof connections.$inferSelect): { provider: ReadProvider; sessionId: string } {
   if (conn.provider === "fints") {
     const baseUrl = process.env.FINTS_SIDECAR_URL ?? "http://127.0.0.1:8790";
@@ -74,11 +122,16 @@ function buildProvider(conn: typeof connections.$inferSelect): { provider: ReadP
         baseUrl, token,
         blz: conn.blz ?? "", user: conn.fintsUserId ?? "",
         pin: conn.pinEnc ? decrypt(conn.pinEnc) : "",
-        endpoint: conn.fintsEndpoint ?? "", productId: conn.fintsProductId ?? "",
+        endpoint: conn.fintsEndpoint ?? "",
+        productId: getFintsProductId(conn.fintsProductId),
+        productVersion: getFintsProductVersion(),
         clientState: conn.fintsStateEnc ? decrypt(conn.fintsStateEnc) : "",
       }),
       sessionId: "",
     };
+  }
+  if (!isEnableBankingEnabled()) {
+    throw new Error("Enable Banking ist im lokalen Sicherheitsmodus deaktiviert");
   }
   return {
     provider: enableBankingFromEnv(),
@@ -91,7 +144,7 @@ export async function runSync(
   opts: SyncOptions = {},
 ): Promise<SyncStats> {
   const today = opts.today ?? new Date();
-  const stats: SyncStats = { newTx: 0, accounts: 0, errors: [] };
+  const stats: SyncStats = { newTx: 0, pendingTx: 0, accounts: 0, errors: [] };
   const insertedIds: string[] = [];
 
   const [run] = await db.insert(syncRuns).values({ trigger, status: "running" }).returning();
@@ -99,7 +152,11 @@ export async function runSync(
   const conns = await db
     .select()
     .from(connections)
-    .where(eq(connections.status, "active"));
+    .where(
+      opts.connectionIds?.length
+        ? and(eq(connections.status, "active"), inArray(connections.id, opts.connectionIds))
+        : eq(connections.status, "active"),
+    );
 
   for (const conn of conns) {
     let provider: ReadProvider;
@@ -144,12 +201,16 @@ export async function runSync(
       try {
         const since = await cursorFor(acct.id, today);
         const txs = await provider.fetchTransactions(sessionId, acct.ebAccountUid, since);
+        const pending = txs.filter((transaction) => transaction.pending === true);
+        const booked = txs.filter((transaction) => transaction.pending !== true);
+        await replacePendingTransactions(acct.id, pending, today);
+        stats.pendingTx += pending.length;
         stats.accounts += 1;
 
         // Intra-Batch-Dedupe nach importHash, dann DB-Dedupe via ON CONFLICT DO NOTHING.
         const seen = new Set<string>();
         const rows = [];
-        for (const t of txs) {
+        for (const t of booked) {
           const row = toRow(acct.id, t);
           if (seen.has(row.importHash)) continue;
           seen.add(row.importHash);
@@ -164,6 +225,25 @@ export async function runSync(
           if (inserted.length > 0) {
             stats.newTx += 1;
             insertedIds.push(inserted[0].id);
+          } else if (row.ebEntryRef) {
+            // FinTS-Mappings können verbessert werden (z. B. getrennte IBAN/
+            // Händlernamen). Vorhandene Bankbuchungen anhand ihrer stabilen
+            // Referenz aktualisieren, ohne sie als neue Umsätze zu zählen.
+            await db
+              .update(transactions)
+              .set({
+                valueDate: row.valueDate,
+                counterpartyName: row.counterpartyName,
+                counterpartyIban: row.counterpartyIban,
+                purpose: row.purpose,
+                raw: row.raw,
+              })
+              .where(
+                and(
+                  eq(transactions.accountId, row.accountId),
+                  eq(transactions.ebEntryRef, row.ebEntryRef),
+                ),
+              );
           }
         }
       } catch (e) {

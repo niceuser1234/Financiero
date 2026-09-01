@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import date
-from fints_sidecar.mapping import map_transaction, to_cents
+from fints_sidecar.mapping import map_transaction, split_applicant, to_cents
 
 class FakeAmount:
     def __init__(self, amount, currency="EUR"):
@@ -37,3 +37,37 @@ def test_missing_optional_fields_become_null():
     assert row["counterparty_name"] is None
     assert row["value_date"] is None
     assert row["entry_ref"] is None
+
+
+def test_splits_iban_prefixed_dkb_applicant_name():
+    name, iban = split_applicant("DE63120300000001999333DKB", None)
+    assert name == "DKB"
+    assert iban == "DE63120300000001999333"
+
+
+def test_splits_iban_prefixed_paypal_applicant_name():
+    name, iban = split_applicant(
+        "LU89751000135104200EPayPal Europe S.a.r.l. et Cie S.C.A", None
+    )
+    assert name == "PayPal Europe S.a.r.l. et Cie S.C.A"
+    assert iban == "LU89751000135104200E"
+
+
+def test_keeps_separate_applicant_fields_unchanged():
+    name, iban = split_applicant("Netflix", "DE111")
+    assert name == "Netflix"
+    assert iban == "DE111"
+
+def test_pending_transaction_uses_fallback_date_and_is_marked():
+    fallback = date(2026, 8, 17)
+    data = {
+        "amount": FakeAmount(Decimal("-652.00")),
+        "applicant_name": "Airline",
+        "purpose": "Flugbuchung",
+    }
+
+    row = map_transaction(data, pending=True, fallback_date=fallback)
+
+    assert row["booking_date"] == "2026-08-17"
+    assert row["amount_cents"] == -65200
+    assert row["pending"] is True

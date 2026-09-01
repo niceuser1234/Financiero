@@ -1,35 +1,20 @@
-"use client";
-
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { retryClassification } from "@/lib/classify/actions";
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 
 export function ReclassifyBanner({ count }: { count: number }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
   if (count === 0) return null;
 
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-review-soft px-4 py-3 text-sm text-review">
       <span>
-        {count} Umsatz{count === 1 ? "" : "e"} nicht klassifiziert.
+        {count} Umsatz{count === 1 ? "" : "e"} noch ohne Kategorie.
       </span>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={pending}
-        onClick={() =>
-          start(async () => {
-            const { classified } = await retryClassification();
-            toast.success(`${classified} Umsätze klassifiziert`);
-            router.refresh();
-          })
-        }
+      <Link
+        href="/transactions"
+        className={buttonVariants({ size: "sm", variant: "outline" })}
       >
-        {pending ? "Läuft…" : "Erneut versuchen"}
-      </Button>
+        Umsätze ansehen
+      </Link>
     </div>
   );
 }

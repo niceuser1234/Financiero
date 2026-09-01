@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSync } from "@/lib/banking/sync";
 import { runPipeline } from "@/lib/classify/pipeline";
+import { getAutoSyncState } from "@/lib/banking/auto-sync";
 
 export const maxDuration = 300;
 
@@ -8,6 +9,15 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const schedule = await getAutoSyncState();
+  if (!schedule.due) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      nextSyncAt: schedule.nextSyncAt.toISOString(),
+    });
   }
 
   // Klassifizierung läuft jetzt synchron innerhalb der Pipeline — kein Batch-Poll mehr.

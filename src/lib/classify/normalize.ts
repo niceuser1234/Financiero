@@ -6,6 +6,40 @@ const BOILERPLATE = [
   /\bDE\d{2}[A-Z0-9]{2,}\b/g, // Gläubiger-IDs / IBANs im Fließtext
 ];
 
+const IBAN_LENGTHS: Readonly<Record<string, number>> = {
+  AT: 20,
+  BE: 16,
+  CH: 21,
+  CZ: 24,
+  DE: 22,
+  DK: 18,
+  ES: 24,
+  FI: 18,
+  FR: 27,
+  GB: 22,
+  GR: 27,
+  IE: 22,
+  IT: 27,
+  LI: 21,
+  LU: 20,
+  NL: 18,
+  NO: 15,
+  PL: 28,
+  PT: 25,
+  SE: 24,
+};
+
+/** Entfernt eine von MT940 direkt vor den Namen gesetzte Gegenkonto-IBAN. */
+export function stripLeadingIban(value: string | null): string | null {
+  if (!value) return value;
+  const compact = value.trim();
+  const length = IBAN_LENGTHS[compact.slice(0, 2).toUpperCase()];
+  if (!length || compact.length <= length) return compact;
+  const candidate = compact.slice(0, length);
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/i.test(candidate)) return compact;
+  return compact.slice(length).trim() || null;
+}
+
 /** Retail/marketplace/cashflow noise — never a subscription/contract. */
 export const NON_RECURRING_BRAND =
   /\b(rewe|aldi|lidl|edeka|rossmann|\bdm\b|konsum|amazon|vinted|kleiderkreisel|paypal|deutsche bahn|db vertrieb|getkong|playtomic|nextbike|studentenwerk|mc[ -]?(?:doener|döner)|doener|döner|einzahlung|kartenpreis|dkb)\b/i;
@@ -76,7 +110,8 @@ export function unwrapPaypal(
   counterparty: string | null,
   purpose: string | null,
 ): { merchant: string } | null {
-  if (!counterparty || !/paypal/i.test(counterparty)) return null;
+  const cleanCounterparty = stripLeadingIban(counterparty);
+  if (!cleanCounterparty || !/paypal/i.test(cleanCounterparty)) return null;
   const p = purpose ?? "";
 
   const patterns = [
@@ -97,7 +132,8 @@ export function unwrapPaypal(
 function rawBase(counterparty: string | null, purpose: string | null): string {
   const unwrapped = unwrapPaypal(counterparty, purpose);
   if (unwrapped) return unwrapped.merchant;
-  if (counterparty && counterparty.trim()) return counterparty;
+  const cleanCounterparty = stripLeadingIban(counterparty);
+  if (cleanCounterparty) return cleanCounterparty;
   return normalizePurpose(purpose);
 }
 

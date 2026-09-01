@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, connections } from "@/db/schema";
+import { isEnableBankingEnabled } from "@/lib/local-mode";
 import { requireSession } from "@/lib/session";
 import { enableBankingFromEnv } from "./enable-banking";
 import { signState } from "./state";
@@ -13,6 +14,7 @@ import type { Aspsp } from "./types";
 
 export async function listAspsps(country = "DE"): Promise<Aspsp[]> {
   await requireSession();
+  if (!isEnableBankingEnabled()) return [];
   try {
     return await enableBankingFromEnv().getAspsps(country);
   } catch {
@@ -32,6 +34,9 @@ export async function listConnections() {
 
 export async function startBankConnect(formData: FormData) {
   await requireSession();
+  if (!isEnableBankingEnabled()) {
+    throw new Error("Enable Banking ist im lokalen Sicherheitsmodus deaktiviert");
+  }
   const aspspName = String(formData.get("aspsp") ?? "");
   const country = String(formData.get("country") ?? "DE");
   if (!aspspName) throw new Error("Keine Bank ausgewählt");
@@ -48,6 +53,9 @@ export async function runManualSync(): Promise<SyncStats> {
 
 export async function reconnect(connectionId: string) {
   await requireSession();
+  if (!isEnableBankingEnabled()) {
+    throw new Error("Enable Banking ist im lokalen Sicherheitsmodus deaktiviert");
+  }
   const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
   if (!conn) throw new Error("Verbindung nicht gefunden");
   const state = signState({ aspsp: conn.aspspName, country: conn.aspspCountry, reconnect: conn.id });

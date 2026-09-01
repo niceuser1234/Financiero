@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CategoryRule, Merchant } from "@/db/schema";
-import { applyRulesTo } from "./rules";
+import { applyRulesTo, matchBuiltinRule } from "./rules";
 
 function rule(p: Partial<CategoryRule>): CategoryRule {
   return {
@@ -68,5 +68,62 @@ describe("applyRulesTo", () => {
       new Map(),
     );
     expect(m?.categoryId).toBe("cat-streaming");
+  });
+});
+
+describe("matchBuiltinRule", () => {
+  it("recognizes DKB card-account movements as transfers", () => {
+    expect(
+      matchBuiltinRule({
+        counterpartyName: "DE63120300000001999333DKB",
+        purpose: "4930000029943435 22:08 Jonathan DKB BANKING",
+      }),
+    ).toEqual({ categorySlug: "umbuchung", isTransfer: true, overridesMerchant: true });
+  });
+
+  it("uses the amount sign to separate EGYM fees from refunds", () => {
+    expect(
+      matchBuiltinRule({
+        counterpartyName: "EGYM Wellpass GmbH",
+        purpose: "EGYM Wellpass 08-2026",
+        amountCents: -2_990n,
+      }),
+    ).toEqual({
+      categorySlug: "gesundheit-fitness-fitnessstudio",
+      overridesMerchant: true,
+    });
+    expect(
+      matchBuiltinRule({
+        counterpartyName: "EGYM Wellpass GmbH",
+        purpose: "Erstattung Baederkarte",
+        amountCents: 700n,
+      }),
+    ).toEqual({ categorySlug: "einkommen-erstattungen", overridesMerchant: true });
+  });
+
+  it("recognizes positive salary bookings independently of a learned merchant default", () => {
+    expect(
+      matchBuiltinRule({
+        counterpartyName: "AURUMTOURS GMBH",
+        purpose: "GEHALT 7/26",
+        amountCents: 175_000n,
+      }),
+    ).toEqual({ categorySlug: "einkommen-gehalt", overridesMerchant: true });
+  });
+
+  it.each([
+    ["DIMITRI TELESCH", "Miete September", "wohnen-miete"],
+    ["Adam Riese GmbH", "Beitrag Privathaft", "versicherungen-haftpflicht"],
+    ["Studentenwerk Leipzig", "ELV Cafeteria", "restaurants-bars-cafe"],
+    ["PayPal Europe S.a.r.l.", "Ihr Einkauf bei Zalando SE", "shopping-kleidung"],
+    ["PayPal Europe S.a.r.l.", "Ihr Einkauf bei Cineplex", "freizeit-reisen-events-kultur"],
+  ])("maps %s / %s", (counterpartyName, purpose, categorySlug) => {
+    expect(matchBuiltinRule({ counterpartyName, purpose })?.categorySlug).toBe(categorySlug);
+  });
+
+  it("uses Sonstiges only for PayPal texts without a recognizable merchant", () => {
+    expect(matchBuiltinRule({ counterpartyName: "PayPal Europe S.a.r.l.", purpose: "PP.5306.PP" })).toEqual({
+      categorySlug: "sonstiges",
+    });
   });
 });

@@ -10,37 +10,27 @@ import { EmptyState } from "@/components/ds/empty-state";
 import { SegmentedControl } from "@/components/ds/segmented-control";
 import { CategoryDonut } from "@/components/charts/category-donut";
 import { TrendBars } from "@/components/charts/trend-bars";
-import { getAnalyticsDTO, type AnalyticsDTO } from "@/lib/analytics/actions";
+import { CashflowBreakdown } from "@/components/analysis/cashflow-breakdown";
+import { LiquidityForecastCard } from "@/components/analysis/liquidity-forecast-card";
+import { SpendingDrivers } from "@/components/analysis/spending-drivers";
+import { getAnalysisDTO, type AnalysisDTO } from "@/lib/analytics/actions";
 
 const PERIODS = [
-  { value: "month", label: "Monat", days: null as number | null },
-  { value: "quarter", label: "3 Monate", days: 90 },
-  { value: "year", label: "1 Jahr", days: 365 },
+  { value: "month", label: "Monat" },
+  { value: "quarter", label: "3 Monate" },
+  { value: "year", label: "1 Jahr" },
 ] as const;
 
 type Period = (typeof PERIODS)[number]["value"];
 
-function rangeFor(days: number | null): { from: string; to: string } {
-  const to = new Date().toISOString().slice(0, 10);
-  if (days === null) {
-    const now = new Date();
-    return {
-      from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
-      to,
-    };
-  }
-  return { from: new Date(Date.now() - days * 24 * 3600 * 1000).toISOString().slice(0, 10), to };
-}
-
-export function AnalysisView({ initial }: { initial: AnalyticsDTO }) {
+export function AnalysisView({ initial }: { initial: AnalysisDTO }) {
   const [dto, setDto] = useState(initial);
   const [range, setRange] = useState<Period>("month");
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
   function onRangeChange(value: Period) {
     setRange(value);
-    const days = PERIODS.find((p) => p.value === value)?.days ?? null;
-    startTransition(async () => setDto(await getAnalyticsDTO(rangeFor(days))));
+    startTransition(async () => setDto(await getAnalysisDTO(value)));
   }
 
   return (
@@ -53,6 +43,7 @@ export function AnalysisView({ initial }: { initial: AnalyticsDTO }) {
             options={PERIODS.map((p) => ({ value: p.value, label: p.label }))}
             value={range}
             onChange={onRangeChange}
+            disabled={isPending}
           />
         }
       />
@@ -60,6 +51,13 @@ export function AnalysisView({ initial }: { initial: AnalyticsDTO }) {
       <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2">
         <KpiCard label="Einnahmen" value={dto.incomeFmt} tone="income" />
         <KpiCard label="Ausgaben" value={dto.expensesFmt} tone="expense" />
+      </div>
+
+      <LiquidityForecastCard data={dto.forecast} />
+
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <SpendingDrivers data={dto.drivers} />
+        <CashflowBreakdown data={dto.cashflow} />
       </div>
 
       <Card>

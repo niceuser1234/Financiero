@@ -1,40 +1,70 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bankAccounts, connections } from "@/db/schema";
 import { reconnectFints, __setFetch, startFintsConnect, confirmFintsTan } from "./fints-actions";
 import { encrypt } from "@/lib/crypto";
 
-function json(body: unknown): Response {
-  return { ok: true, status: 200, json: async () => body, text: async () => "" } as unknown as Response;
+function json(body: unknown, ok = true, status = 200): Response {
+  return {
+    ok,
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
-const MARKER = "DKB";
+const TEST_USER = `__fints_test_${crypto.randomUUID()}__`;
+const TEST_PRODUCT_ID = "TESTPRODUCTID";
+
+beforeEach(() => {
+  vi.stubEnv("FINTS_PRODUCT_ID", TEST_PRODUCT_ID);
+});
 
 afterEach(async () => {
-  const conns = await db.select().from(connections).where(eq(connections.aspspName, MARKER));
+  const conns = await db.select().from(connections).where(eq(connections.fintsUserId, TEST_USER));
   for (const c of conns) {
     await db.delete(bankAccounts).where(eq(bankAccounts.connectionId, c.id));
     await db.delete(connections).where(eq(connections.id, c.id));
   }
   __setFetch(undefined);
+  vi.unstubAllEnvs();
 });
 
 describe("startFintsConnect", () => {
   it("persists an expired pending connection on need_tan", async () => {
-    __setFetch(vi.fn().mockResolvedValue(json({
+    const fetchMock = vi.fn().mockResolvedValue(json({
       status: "need_tan", decoupled: true, challenge: "tap", pending_state: "cGVuZA==", client_state: "c3Q=",
-    })) as unknown as typeof fetch);
+    }));
+    __setFetch(fetchMock as unknown as typeof fetch);
 
     const res = await startFintsConnect({
-      blz: "12030000", user: "u", pin: "1234",
-      endpoint: "https://fints.dkb.de/fints", productId: "x",
+      blz: "12030000", user: TEST_USER, pin: "1234",
+      endpoint: "https://fints.dkb.de/fints",
     });
     expect(res.status).toBe("need_tan");
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      product_id: TEST_PRODUCT_ID,
+    });
     const [c] = await db.select().from(connections).where(eq(connections.id, res.connectionId));
     expect(c.status).toBe("expired");
+    expect(c.fintsProductId).toBe(TEST_PRODUCT_ID);
     expect(c.pinEnc).toBeTruthy();
     expect(c.pinEnc).not.toContain("1234"); // verschlüsselt
+  });
+
+  it("shows the actionable product registration error from the sidecar", async () => {
+    __setFetch(vi.fn().mockResolvedValue(json({
+      detail: {
+        code: "product_registration_pending",
+        message: "Die DKB kennt die FinTS-Produkt-ID noch nicht (Bankcode 9078).",
+      },
+    }, false, 503)) as unknown as typeof fetch);
+
+    await expect(startFintsConnect({
+      blz: "12030000", user: TEST_USER, pin: "1234",
+      endpoint: "https://fints.dkb.de/fints",
+    })).rejects.toThrow("Bankcode 9078");
   });
 });
 
@@ -44,7 +74,7 @@ describe("confirmFintsTan", () => {
       status: "need_tan", decoupled: true, challenge: "tap", pending_state: "cGVuZA==", client_state: "c3Q=",
     })) as unknown as typeof fetch);
     const started = await startFintsConnect({
-      blz: "12030000", user: "u", pin: "1234", endpoint: "e", productId: "x",
+      blz: "12030000", user: TEST_USER, pin: "1234", endpoint: "e",
     });
 
     __setFetch(vi.fn().mockResolvedValue(json({
@@ -66,7 +96,7 @@ describe("reconnectFints", () => {
     // seed an expired fints connection with stored creds + one linked account
     const [conn] = await db.insert(connections).values({
       provider: "fints", aspspName: "DKB", aspspCountry: "DE", status: "expired",
-      blz: "12030000", fintsUserId: "u", fintsEndpoint: "https://fints.dkb.de/fints",
+      blz: "12030000", fintsUserId: TEST_USER, fintsEndpoint: "https://fints.dkb.de/fints",
       fintsProductId: "x", pinEnc: encrypt("1234"), fintsStateEnc: encrypt("old"), tanMechanism: "decoupled",
     }).returning();
     await db.insert(bankAccounts).values({
@@ -93,7 +123,7 @@ describe("reconnectFints", () => {
   it("reassigns an IBAN to the reconnecting connection when it was linked elsewhere", async () => {
     const [oldConn] = await db.insert(connections).values({
       provider: "fints", aspspName: "DKB", status: "expired",
-      blz: "12030000", fintsUserId: "u", fintsEndpoint: "e", fintsProductId: "x",
+      blz: "12030000", fintsUserId: TEST_USER, fintsEndpoint: "e", fintsProductId: "x",
       pinEnc: encrypt("1234"), fintsStateEnc: encrypt("old"),
     }).returning();
     await db.insert(bankAccounts).values({
@@ -101,7 +131,7 @@ describe("reconnectFints", () => {
     });
     const [newConn] = await db.insert(connections).values({
       provider: "fints", aspspName: "DKB", status: "expired",
-      blz: "12030000", fintsUserId: "u", fintsEndpoint: "e", fintsProductId: "x",
+      blz: "12030000", fintsUserId: TEST_USER, fintsEndpoint: "e", fintsProductId: "x",
       pinEnc: encrypt("1234"), fintsStateEnc: encrypt("pending"),
     }).returning();
 
@@ -120,7 +150,7 @@ describe("reconnectFints", () => {
   it("keeps the connection expired and stores pending_state when a TAN is still needed", async () => {
     const [conn] = await db.insert(connections).values({
       provider: "fints", aspspName: "DKB", status: "expired",
-      blz: "12030000", fintsUserId: "u", fintsEndpoint: "e", fintsProductId: "x",
+      blz: "12030000", fintsUserId: TEST_USER, fintsEndpoint: "e", fintsProductId: "x",
       pinEnc: encrypt("1234"), fintsStateEnc: encrypt("old"),
     }).returning();
 

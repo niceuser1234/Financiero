@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Server-Actions enthalten bei der FinTS-Anbindung sensible Zugangsdaten.
+  // Next.js protokolliert ihre Argumente sonst standardmäßig im Dev-Terminal.
+  logging: {
+    serverFunctions: false,
+  },
 };
 
 export default nextConfig;

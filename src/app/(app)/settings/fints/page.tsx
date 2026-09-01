@@ -16,7 +16,7 @@ export default async function FintsPage() {
     <>
       <PageHeader
         title="DKB verbinden (FinTS)"
-        lead="BLZ, Anmeldename, PIN und deine FinTS-Produkt-ID eingeben. Anschließend die Verbindung einmalig in der DKB-App per Tap bestätigen."
+        lead="BLZ, Anmeldename und PIN eingeben. Anschließend die Verbindung einmalig in der DKB-App per Tap bestätigen."
       />
       <FintsConnect existing={existing ?? null} />
     </>

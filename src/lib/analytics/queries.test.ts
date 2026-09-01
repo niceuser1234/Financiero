@@ -1,14 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { bankAccounts, categories, merchants, recurringItems, transactions } from "@/db/schema";
+import {
+  bankAccounts,
+  categories,
+  merchants,
+  pendingTransactions,
+  recurringItems,
+  transactions,
+} from "@/db/schema";
 import { importHash } from "@/lib/import/hash";
+import { fingerprintOf } from "@/lib/classify/normalize";
 import { getDashboardData } from "./queries";
 import { currentMonthWindow } from "./period";
 
 const MARK = `__antest_${crypto.randomUUID()}__`;
 let accountId = "";
 let foodId = "";
+let baseDashboard: Awaited<ReturnType<typeof getDashboardData>>;
 
 async function tx(date: string, cents: bigint, catId?: string, transfer = false) {
   await db.insert(transactions).values({
@@ -25,6 +34,7 @@ async function tx(date: string, cents: bigint, catId?: string, transfer = false)
 
 describe("getDashboardData", () => {
   beforeAll(async () => {
+    baseDashboard = await getDashboardData(new Date("2026-07-25"));
     const [a] = await db.insert(bankAccounts).values({ name: MARK, type: "checking", currency: "EUR", balanceCents: 123456n }).returning();
     accountId = a.id;
     const [food] = await db.select().from(categories).where(eq(categories.slug, "lebensmittel-supermarkt"));
@@ -43,27 +53,30 @@ describe("getDashboardData", () => {
 
   it("computes month income and expenses excluding transfers", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
-    expect(d.incomeMonthCents).toBe(250000n);
-    expect(d.expensesMonthCents).toBe(-6500n); // Umbuchung -100000 nicht enthalten
+    expect(d.incomeMonthCents - baseDashboard.incomeMonthCents).toBe(250000n);
+    expect(d.expensesMonthCents - baseDashboard.expensesMonthCents).toBe(-6500n); // Umbuchung -100000 nicht enthalten
   });
 
   it("rolls expenses up to the top-level category", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
     const food = d.byCategory.find((c) => c.name === "Lebensmittel");
-    expect(food?.sumCents).toBe(-5000n);
+    const baseFood = baseDashboard.byCategory.find((c) => c.name === "Lebensmittel")?.sumCents ?? 0n;
+    expect((food?.sumCents ?? 0n) - baseFood).toBe(-5000n);
   });
 
   it("adds an uncategorized-expenses slice, excluding transfers", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
     const uncat = d.byCategory.find((c) => c.name === "Nicht kategorisiert");
-    expect(uncat?.sumCents).toBe(-1500n); // nur die -1500 Ausgabe, nicht die Umbuchung
+    const baseUncat = baseDashboard.byCategory.find((c) => c.name === "Nicht kategorisiert")?.sumCents ?? 0n;
+    expect((uncat?.sumCents ?? 0n) - baseUncat).toBe(-1500n); // nur die -1500 Ausgabe, nicht die Umbuchung
   });
 
   it("returns a 6-month trend ending in the current month", async () => {
     const d = await getDashboardData(new Date("2026-07-25"));
     expect(d.trend).toHaveLength(6);
     expect(d.trend[5].month).toBe("2026-07");
-    expect(d.trend[5].incomeCents).toBe(250000n);
+    const baseJuly = baseDashboard.trend.find((point) => point.month === "2026-07")?.incomeCents ?? 0n;
+    expect(d.trend[5].incomeCents - baseJuly).toBe(250000n);
   });
 });
 
@@ -80,9 +93,9 @@ describe("getDashboardData: upcoming (zeitunabhängig, nächste 2)", () => {
     merchantId = m.id;
 
     const seeds = [
-      { nextExpectedDate: "2026-08-20", cadence: "monthly" as const },
-      { nextExpectedDate: "2026-09-05", cadence: "quarterly" as const },
-      { nextExpectedDate: "2026-10-01", cadence: "yearly" as const },
+      { nextExpectedDate: "2026-01-20", cadence: "monthly" as const },
+      { nextExpectedDate: "2026-02-05", cadence: "quarterly" as const },
+      { nextExpectedDate: "2026-03-01", cadence: "yearly" as const },
     ];
     const rows = await db
       .insert(recurringItems)
@@ -113,11 +126,11 @@ describe("getDashboardData: upcoming (zeitunabhängig, nächste 2)", () => {
   it("gibt die nächsten 2 Abbuchungen zeitunabhängig zurück, sortiert aufsteigend", async () => {
     expect(itemIds).toHaveLength(3);
     const d = await getDashboardData(new Date("2026-07-21"));
-    expect(d.upcoming).toHaveLength(2);
-    expect(Date.parse(d.upcoming[0].date)).toBeLessThanOrEqual(Date.parse(d.upcoming[1].date));
-    expect(d.upcoming[0].date).toBe("2026-08-20");
-    expect(d.upcoming[1].date).toBe("2026-09-05");
-    expect(d.upcoming.every((u) => u.name === MARK2)).toBe(true);
+    const matching = d.upcoming.filter((item) => item.kind === "recurring" && item.name === MARK2);
+    expect(matching).toHaveLength(2);
+    expect(Date.parse(matching[0].date)).toBeLessThanOrEqual(Date.parse(matching[1].date));
+    expect(matching[0].date).toBe("2026-01-20");
+    expect(matching[1].date).toBe("2026-02-05");
   });
 });
 
@@ -283,14 +296,84 @@ describe("getDashboardData: remainingFixedCents / realAvailableCents", () => {
     expect(d.remainingFixedCents - baseline.remainingFixedCents).toBe(-1500n);
   });
 
-  it("realAvailableCents = totalBalanceCents + remainingFixedCents", async () => {
+  it("realAvailableCents = totalBalanceCents + pendingDebitsCents + remainingFixedCents", async () => {
     const d = await getDashboardData(new Date("2026-07-21"));
-    expect(d.realAvailableCents).toBe(d.totalBalanceCents + d.remainingFixedCents);
+    expect(d.realAvailableCents).toBe(
+      d.totalBalanceCents + d.pendingDebitsCents + d.remainingFixedCents,
+    );
   });
 
   it("exposes periodFrom/periodTo matching the default window", async () => {
     const d = await getDashboardData(new Date("2026-07-21"));
     expect(d.periodFrom).toBe("2026-07-01");
     expect(d.periodTo).toBe("2026-07-21");
+  });
+});
+
+describe("getDashboardData: vorgemerkte Belastungen", () => {
+  const MARK5 = `__antest_pending_${crypto.randomUUID()}__`;
+  let accountId5 = "";
+  let merchantId5 = "";
+  let baseline: Awaited<ReturnType<typeof getDashboardData>>;
+
+  beforeAll(async () => {
+    baseline = await getDashboardData(new Date("2026-08-17"));
+    const [account] = await db
+      .insert(bankAccounts)
+      .values({ name: MARK5, type: "checking", currency: "EUR", balanceCents: 100000n })
+      .returning();
+    accountId5 = account.id;
+    const [merchant] = await db
+      .insert(merchants)
+      .values({ fingerprint: fingerprintOf(MARK5, null), nameClean: MARK5 })
+      .returning();
+    merchantId5 = merchant.id;
+
+    await db.insert(pendingTransactions).values({
+      accountId: accountId5,
+      bookingDate: "2026-08-17",
+      amountCents: -65200n,
+      currency: "EUR",
+      counterpartyName: MARK5,
+      purpose: "Flugbuchung",
+      importHash: `pending-${crypto.randomUUID()}`,
+    });
+    await db.insert(recurringItems).values({
+      merchantId: merchantId5,
+      cadence: "monthly",
+      kind: "contract",
+      amountLastCents: -65200n,
+      amountMedianCents: -65200n,
+      monthlyEquivCents: -65200n,
+      currency: "EUR",
+      nextExpectedDate: "2026-08-20",
+      status: "active",
+      firstSeen: "2026-05-20",
+      lastSeen: "2026-07-20",
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(pendingTransactions).where(eq(pendingTransactions.accountId, accountId5));
+    await db.delete(recurringItems).where(eq(recurringItems.merchantId, merchantId5));
+    await db.delete(merchants).where(eq(merchants.id, merchantId5));
+    await db.delete(bankAccounts).where(eq(bankAccounts.id, accountId5));
+  });
+
+  it("reduziert den real verfügbaren Betrag, ohne die passende Fixkostenprognose doppelt zu zählen", async () => {
+    const d = await getDashboardData(new Date("2026-08-17"));
+
+    expect(d.pendingDebitsCents - baseline.pendingDebitsCents).toBe(-65200n);
+    expect(d.remainingFixedCents - baseline.remainingFixedCents).toBe(0n);
+    expect(d.realAvailableCents - baseline.realAvailableCents).toBe(34800n);
+  });
+
+  it("zeigt die Bankvormerkung statt einer doppelten Prognose in den anstehenden Abbuchungen", async () => {
+    const d = await getDashboardData(new Date("2026-08-17"));
+    const matching = d.upcoming.filter((item) => item.name === MARK5);
+
+    expect(matching).toHaveLength(1);
+    expect(matching[0].kind).toBe("pending");
+    expect(matching[0].amountCents).toBe(-65200n);
   });
 });

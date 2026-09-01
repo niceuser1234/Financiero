@@ -1,7 +1,15 @@
-import { and, eq, gte, lte, lt, sql, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, lte, lt, sql, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { bankAccounts, categories, merchants, recurringItems, transactions } from "@/db/schema";
-import { currentMonthWindow } from "./period";
+import {
+  bankAccounts,
+  categories,
+  merchants,
+  pendingTransactions,
+  recurringItems,
+  transactions,
+} from "@/db/schema";
+import { brandKeyOf, brandNameOf, fingerprintOf, unwrapPaypal } from "@/lib/classify/normalize";
+import { currentMonthWindow, dateKeyDE } from "./period";
 
 export interface CategorySlice {
   categoryId: string;
@@ -23,6 +31,7 @@ export interface UpcomingItem {
   name: string;
   date: string;
   amountCents: bigint;
+  kind: "pending" | "recurring";
 }
 export interface DashboardData {
   totalBalanceCents: bigint;
@@ -35,6 +44,7 @@ export interface DashboardData {
   upcoming: UpcomingItem[];
   savingMonthCents: bigint;
   remainingFixedCents: bigint;
+  pendingDebitsCents: bigint;
   realAvailableCents: bigint;
   periodFrom: string;
   periodTo: string;
@@ -56,6 +66,7 @@ export async function getDashboardData(
   const from = range?.from ?? win.from;
   const to = range?.to ?? win.to;
   const monthEnd = win.monthEnd;
+  const [todayYear, todayMonth] = dateKeyDE(today).split("-").map(Number);
 
   const notTransfer = eq(transactions.isTransfer, false);
   const inRange = and(gte(transactions.bookingDate, from), lte(transactions.bookingDate, to), notTransfer);
@@ -107,12 +118,30 @@ export async function getDashboardData(
     );
   const savingMonthCents = BigInt(savingPlan?.sum ?? "0") + BigInt(savingExtra?.sum ?? "0");
 
-  // Fixkosten, die diesen Monat noch NICHT abgebucht wurden (heute < fällig ≤ Monatsende).
-  const [remaining] = await db
+  // Bankseitig vorgemerkte Belastungen. Sie sind noch keine gebuchten Ausgaben,
+  // reduzieren aber bereits das real verfügbare Guthaben.
+  const pendingDebitRows = await db
     .select({
-      sum: sql<string>`coalesce(sum(${recurringItems.amountLastCents}), 0)`,
+      name: pendingTransactions.counterpartyName,
+      purpose: pendingTransactions.purpose,
+      date: pendingTransactions.bookingDate,
+      amount: pendingTransactions.amountCents,
+    })
+    .from(pendingTransactions)
+    .where(lt(pendingTransactions.amountCents, 0n))
+    .orderBy(desc(sql`abs(${pendingTransactions.amountCents})`));
+  const pendingDebitsCents = pendingDebitRows.reduce((sum, row) => sum + row.amount, 0n);
+
+  // Fixkosten, die diesen Monat noch NICHT abgebucht wurden (heute < fällig ≤ Monatsende).
+  // Eine bereits vorgemerkte Belastung mit gleichem Händler und ähnlichem Betrag
+  // deckt die Prognose ab und darf nicht doppelt vom verfügbaren Betrag abgezogen werden.
+  const remainingRows = await db
+    .select({
+      amount: recurringItems.amountLastCents,
+      fingerprint: merchants.fingerprint,
     })
     .from(recurringItems)
+    .innerJoin(merchants, eq(recurringItems.merchantId, merchants.id))
     .where(
       and(
         eq(recurringItems.status, "active"),
@@ -121,7 +150,21 @@ export async function getDashboardData(
         sql`${recurringItems.nextExpectedDate} <= ${monthEnd}`,
       ),
     );
-  const remainingFixedCents = BigInt(remaining?.sum ?? "0"); // negativ
+  const pendingMatches = pendingDebitRows.map((row) => ({
+    amount: row.amount,
+    fingerprint: brandKeyOf(fingerprintOf(row.name, row.purpose)),
+  }));
+  const unmatchedRemaining = remainingRows.filter((row) => {
+    const recurringFingerprint = brandKeyOf(row.fingerprint);
+    return !pendingMatches.some((pending) => {
+      if (!pending.fingerprint || pending.fingerprint !== recurringFingerprint) return false;
+      const recurringAbs = row.amount < 0n ? -row.amount : row.amount;
+      const pendingAbs = pending.amount < 0n ? -pending.amount : pending.amount;
+      if (recurringAbs === 0n) return false;
+      return Math.abs(Number(pendingAbs - recurringAbs)) / Number(recurringAbs) <= 0.15;
+    });
+  });
+  const remainingFixedCents = unmatchedRemaining.reduce((sum, row) => sum + row.amount, 0n);
 
   // Ausgaben nach Kategorie (auf Top-Level gerollt).
   const catRows = await db
@@ -159,7 +202,7 @@ export async function getDashboardData(
   byCategory.sort((a, b) => Number(a.sumCents - b.sumCents)); // negativ -> größte Ausgabe zuerst
 
   // 6-Monats-Trend.
-  const trendFrom = `${ymKey(today.getFullYear(), today.getMonth() - 5)}-01`;
+  const trendFrom = `${ymKey(todayYear, todayMonth - 1 - 5)}-01`;
   const trendRows = await db
     .select({
       month: sql<string>`to_char(${transactions.bookingDate}::date, 'YYYY-MM')`,
@@ -173,7 +216,7 @@ export async function getDashboardData(
   const trendMap = new Map(trendRows.map((r) => [r.month, r]));
   const trend: TrendPoint[] = [];
   for (let i = 5; i >= 0; i--) {
-    const key = ymKey(today.getFullYear(), today.getMonth() - i);
+    const key = ymKey(todayYear, todayMonth - 1 - i);
     const r = trendMap.get(key);
     trend.push({
       month: key,
@@ -192,17 +235,19 @@ export async function getDashboardData(
       })
       .from(transactions)
       .leftJoin(merchants, eq(transactions.merchantId, merchants.id))
-      .where(and(inRange, lt(transactions.amountCents, 0n)))
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(and(inRange, lt(transactions.amountCents, 0n), sql`not (${excludedKinds})`))
       .groupBy(sql`coalesce(${merchants.nameClean}, ${transactions.counterpartyName}, 'Unbekannt')`)
       .orderBy(sql`sum(${transactions.amountCents}) asc`)
       .limit(5)
   ).map((r) => ({ name: r.name, sumCents: BigInt(r.sum), count: r.count }));
 
-  // Anstehende Abbuchungen — zeitunabhängig, nur die nächsten 2.
-  const upcoming = (
+  // Prognostizierte Abbuchungen — bereits vorgemerkte Treffer werden nicht doppelt gezeigt.
+  const recurringUpcoming = (
     await db
       .select({
         name: merchants.nameClean,
+        fingerprint: merchants.fingerprint,
         date: recurringItems.nextExpectedDate,
         amount: recurringItems.amountLastCents,
       })
@@ -216,8 +261,36 @@ export async function getDashboardData(
         ),
       )
       .orderBy(recurringItems.nextExpectedDate)
-      .limit(2)
-  ).map((r) => ({ name: r.name, date: r.date!, amountCents: r.amount }));
+  )
+    .filter((row) => {
+      const recurringFingerprint = brandKeyOf(row.fingerprint);
+      return !pendingMatches.some((pending) => {
+        if (!pending.fingerprint || pending.fingerprint !== recurringFingerprint) return false;
+        const recurringAbs = row.amount < 0n ? -row.amount : row.amount;
+        const pendingAbs = pending.amount < 0n ? -pending.amount : pending.amount;
+        if (recurringAbs === 0n) return false;
+        return Math.abs(Number(pendingAbs - recurringAbs)) / Number(recurringAbs) <= 0.15;
+      });
+    })
+    .slice(0, 2)
+    .map((row) => ({
+      name: row.name,
+      date: row.date!,
+      amountCents: row.amount,
+      kind: "recurring" as const,
+    }));
+  const pendingUpcoming = pendingDebitRows.map((row) => ({
+    name:
+      unwrapPaypal(row.name, row.purpose)?.merchant ??
+      brandNameOf(row.name, row.purpose) ??
+      row.name ??
+      row.purpose ??
+      "Vorgemerkte Zahlung",
+    date: row.date,
+    amountCents: row.amount,
+    kind: "pending" as const,
+  }));
+  const upcoming = [...pendingUpcoming, ...recurringUpcoming];
 
   return {
     totalBalanceCents: BigInt(bal?.sum ?? "0"),
@@ -230,7 +303,8 @@ export async function getDashboardData(
     upcoming,
     savingMonthCents,
     remainingFixedCents,
-    realAvailableCents: BigInt(bal?.sum ?? "0") + remainingFixedCents,
+    pendingDebitsCents,
+    realAvailableCents: BigInt(bal?.sum ?? "0") + pendingDebitsCents + remainingFixedCents,
     periodFrom: from,
     periodTo: to,
   };

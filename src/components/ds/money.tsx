@@ -8,7 +8,7 @@ const TONE_CLASS: Record<AmountTone, string> = {
 };
 
 /**
- * Geldbetrag in DS-Optik: Space Grotesk, tabellarisch, rechtsbündig.
+ * Geldbetrag in DS-Optik: Display-Font, tabellarisch, rechtsbündig.
  * Einnahmen grün, Ausgaben neutral — Rot ist im DS keine Betragsfarbe.
  */
 export function Money({
